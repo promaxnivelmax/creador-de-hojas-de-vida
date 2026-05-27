@@ -11,6 +11,92 @@ import {
   Home, PlusCircle, BarChart2, Globe, Menu, X
 } from "lucide-react";
 
+const LOCAL_STORAGE_KEY = "tramites_resumes_db";
+
+const DEFAULT_SAMPLE_RESUMES: Resume[] = [
+  {
+    id: "carlos-mendoza",
+    slug: "carlos-mendoza",
+    name: "Carlos Alberto Mendoza",
+    nombres: "Carlos Alberto",
+    apellidos: "Mendoza Rojas",
+    identificacion: "1023456789",
+    lugar_expedicion: "Bogotá D.C.",
+    fecha_nacimiento: "1990-08-15",
+    lugar_nacimiento: "Bogotá",
+    estado_civil: "Soltero",
+    celular: "3115551234",
+    correo: "carlos.mendoza@example.com",
+    direccion: "Calle 45 # 12-34",
+    barrio: "Chapinero",
+    ciudad: "Bogotá",
+    position: "Ingeniero de Sistemas",
+    photo_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=250&auto=format&fit=crop",
+    city: "Bogotá",
+    country: "Colombia",
+    email: "carlos.mendoza@example.com",
+    phone: "3115551234",
+    website: "https://carlosmendoza.dev",
+    summary: "Profesional en Ingeniería de Sistemas con más de 6 años de experiencia en desarrollo de software y gestión de infraestructuras de tecnologías. Comprometido con soluciones de calidad, escalables y con alto impacto para servicios digitales.",
+    created_at: "2026-05-20T10:00:00.000Z",
+    experiences: [
+      {
+        id: "exp1",
+        role: "Coordinador de Desarrollo",
+        company: "Sistemas & Soluciones S.A.S.",
+        start_date: "2022-01",
+        end_date: "",
+        current: true,
+        description: "Liderazgo técnico del equipo de desarrollo, implementación de arquitecturas escalables basadas en servicios web y supervisión de integraciones críticas con bases de datos.",
+        ciudad: "Bogotá"
+      },
+      {
+        id: "exp2",
+        role: "Desarrollador Full Stack",
+        company: "Tecnología Avanzada Ltda.",
+        start_date: "2019-06",
+        end_date: "2021-12",
+        current: false,
+        description: "Desarrollo y mantenimiento de aplicativos internos utilizando React y Node.js, optimización de consultas SQL y automatizaciones en la nube.",
+        ciudad: "Medellín"
+      }
+    ],
+    education: [
+      {
+        id: "edu1",
+        degree: "Ingeniero de Sistemas",
+        school: "Universidad de los Andes",
+        start_date: "2015-12",
+        end_date: "",
+        current: false,
+        description: "Graduado con honores académicos y tesis laureada en computación móvil.",
+        ciudad: "Bogotá"
+      }
+    ],
+    skills: [
+      { id: "sk1", name: "JavaScript / TypeScript / React", level: 90 },
+      { id: "sk2", name: "Bases de Datos SQL & NoSQL", level: 85 },
+      { id: "sk3", name: "Servicios en la Nube", level: 80 }
+    ],
+    references: [
+      {
+        id: "ref1",
+        name: "Ing. Andrés Gómez",
+        role: "Director de TI",
+        phone: "3201234567",
+        ciudad: "Bogotá"
+      },
+      {
+        id: "ref2",
+        name: "Dra. Patricia Restrepo",
+        role: "Gerente de Proyectos",
+        phone: "3159876543",
+        ciudad: "Medellín"
+      }
+    ]
+  }
+];
+
 export default function App() {
   const [resumes, setResumes] = useState<Resume[]>([]);
   // Initially evaluate if user is logged in
@@ -25,6 +111,7 @@ export default function App() {
   const [publicPortfolioSlug, setPublicPortfolioSlug] = useState<string | null>(null);
   const [selectedPreviewId, setSelectedPreviewId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   // Check URL queries on load and hash updates to handle dynamic routing mimics
   useEffect(() => {
@@ -42,14 +129,19 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-  // Fetch resumes from backend Express server
+  // Fetch resumes from backend Express server or fallback locally
   const fetchResumesFromServer = async () => {
     try {
       setLoading(true);
+      setErrorMsg("");
       const res = await fetch("/api/resumes");
       if (!res.ok) throw new Error("Could not fetch resumes");
       const data = await res.json();
       setResumes(data);
+      setIsOffline(false);
+      
+      // Silently sync local copy
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
       
       // Select first resume as preview default if present and none already selected
       if (data.length > 0 && !selectedPreviewId) {
@@ -71,8 +163,41 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg("Failed to synchronize with backend database server.");
+      console.warn("Express server not found, falling back to secure Local Storage mode.", err);
+      setIsOffline(true);
+      
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      let dataList: Resume[] = [];
+      if (stored) {
+        try {
+          dataList = JSON.parse(stored);
+        } catch (e) {
+          console.error("Failed to parse stored resumes", e);
+        }
+      }
+      
+      if (!dataList || dataList.length === 0) {
+        dataList = DEFAULT_SAMPLE_RESUMES;
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataList));
+      }
+
+      setResumes(dataList);
+      
+      if (dataList.length > 0 && !selectedPreviewId) {
+        setSelectedPreviewId(dataList[0].id);
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const cvSlug = params.get("cv");
+      if (cvSlug) {
+        const matchingCv = dataList.find(
+          (r: Resume) => r.slug.toLowerCase() === cvSlug.toLowerCase() || r.id === cvSlug
+        );
+        if (matchingCv) {
+          setSelectedResume(matchingCv);
+          setCurrentView("renderer");
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -84,47 +209,93 @@ export default function App() {
 
   // Create or Update resume
   const handleSaveResume = async (resume: Resume) => {
-    try {
-      const res = await fetch("/api/resumes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(resume)
-      });
-      if (!res.ok) throw new Error("Could not save resume information");
-      const savedData = await res.json();
+    const pNombres = resume.nombres || resume.name || "Sin nombres";
+    const pApellidos = resume.apellidos || "";
+    const pFullName = resume.name || `${pNombres} ${pApellidos}`.trim();
+    const pPosition = resume.position || "Profesional";
 
-      // Refresh list
-      await fetchResumesFromServer();
-      
-      // Shift viewport to view the newly compiled item
-      setSelectedResume(savedData);
-      setCurrentView("renderer");
-      setEditingResume(null);
-    } catch (err: any) {
-      alert("Error saving: " + err.message);
+    // Standardize IDs
+    const id = resume.id || Math.random().toString(36).substring(2, 11);
+    const rawSlug = pFullName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    
+    let slug = rawSlug || "perfil";
+    let slugCount = 1;
+    while (resumes.some(r => r.id !== id && r.slug === slug)) {
+      slug = `${rawSlug}-${slugCount++}`;
     }
+
+    const cleanedResume: Resume = {
+      ...resume,
+      id,
+      slug,
+      name: pFullName,
+      nombres: pNombres,
+      apellidos: pApellidos,
+      position: pPosition,
+      created_at: resume.created_at || new Date().toISOString(),
+    };
+
+    // Update in local state right away
+    const updated = [...resumes];
+    const existingIndex = updated.findIndex(r => r.id === id);
+    if (existingIndex !== -1) {
+      updated[existingIndex] = cleanedResume;
+    } else {
+      updated.push(cleanedResume);
+    }
+
+    setResumes(updated);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+
+    if (!isOffline) {
+      try {
+        const res = await fetch("/api/resumes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cleanedResume)
+        });
+        if (res.ok) {
+          const savedData = await res.json();
+          await fetchResumesFromServer();
+          setSelectedResume(savedData);
+          setCurrentView("renderer");
+          setEditingResume(null);
+          return;
+        }
+      } catch (err: any) {
+        console.warn("Failed remote POST, saved locally:", err);
+        setIsOffline(true);
+      }
+    }
+
+    setSelectedResume(cleanedResume);
+    setCurrentView("renderer");
+    setEditingResume(null);
   };
 
   // Delete resume
   const handleDeleteResume = async (id: string) => {
-    const confirmation = window.confirm("Are you sure you want to permanently delete this resume portfolio?");
+    const confirmation = window.confirm("¿Está seguro de que desea eliminar permanentemente esta hoja de vida?");
     if (!confirmation) return;
-    try {
-      const res = await fetch(`/api/resumes/${id}`, {
-        method: "DELETE"
-      });
-      if (!res.ok) throw new Error("Deletion operation failed");
-      
-      // Filter locally to instantly update UI
-      setResumes(prev => {
-        const remaining = prev.filter(r => r.id !== id);
-        if (selectedPreviewId === id) {
-          setSelectedPreviewId(remaining[0]?.id || null);
-        }
-        return remaining;
-      });
-    } catch (err: any) {
-      alert("Error: " + err.message);
+
+    const remaining = resumes.filter(r => r.id !== id);
+    setResumes(remaining);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remaining));
+
+    if (selectedPreviewId === id) {
+      setSelectedPreviewId(remaining[0]?.id || null);
+    }
+
+    if (!isOffline) {
+      try {
+        const res = await fetch(`/api/resumes/${id}`, {
+          method: "DELETE"
+        });
+        if (!res.ok) throw new Error("Deletion failed");
+      } catch (err: any) {
+        console.warn("Could not delete remotely, deleted locally:", err);
+        setIsOffline(true);
+      }
     }
   };
 
@@ -299,9 +470,26 @@ export default function App() {
                 </button>
               )}
               {currentView === "dashboard" && (
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                  <span className="text-xs font-semibold text-stone-700 font-display">Hojas de Vida Guardadas</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    <span className="text-xs font-semibold text-stone-700 font-display">Hojas de Vida Guardadas</span>
+                  </div>
+                  {isOffline ? (
+                    <span 
+                      className="text-[10px] bg-amber-50 text-amber-850 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full font-mono font-bold select-none cursor-help shadow-2xs transition" 
+                      title="Los datos se guardan de forma segura en tu navegador (LocalStorage). Ideal para Vercel y GitHub Pages sin servidor."
+                    >
+                      💾 Almacenamiento Local Activo
+                    </span>
+                  ) : (
+                    <span 
+                      className="text-[10px] bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full font-mono font-bold select-none cursor-help shadow-2xs transition" 
+                      title="Los datos están listos para ser guardados en la nube utilizando el servidor de base de datos."
+                    >
+                      ☁️ Nube Sincronizada
+                    </span>
+                  )}
                 </div>
               )}
             </div>
