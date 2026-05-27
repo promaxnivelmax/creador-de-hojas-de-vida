@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-brand: #ffc132;
+  --color-brand-light: #fffdf5;
+  --color-brand-medium: #ffe59a;
+  --color-brand-dark: #cc9410;
+}
+
+/* Custom Webkit scrollbar for perfect sleekness */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(250, 248, 245, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 126, 116, 0.5);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 113, 108, 0.7);
+}
+
+/* Base style resets */
+body {
+  font-family: var(--font-sans);
+  background-color: #fafaf9; /* Stone-50 warm background */
+  color: #292524; /* Stone-800 warm dark text */
+}
+
+/* Print Specific Overrides */
+@media print {
+  /* Hide interactive margins of browser */
+  @page {
+    margin: 1cm;
+    size: auto;
+  }
+  
+  /* Hide any non-printable tools */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Ensure backgrounds render during printing */
+  body {
+    background-color: white !important;
+    color: black !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-card-shadow {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  /* Force multi-column layout to render side-by-side if supported */
+  .print-row {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 1.5rem !important;
+  }
+
+  .print-col-3 {
+    width: 33.333% !important;
+  }
+
+  .print-col-9 {
+    width: 66.666% !important;
+  }
+
+  /* Avoid splitting experiences midway */
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

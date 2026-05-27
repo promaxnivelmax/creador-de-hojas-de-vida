@@ -1,0 +1,6 @@
+{
+  "name": "Tramites y Servicios",
+  "description": "Una plataforma SaaS de servicios y creación de Hojas de Vida con diseño clásico, onboarding conversacional, base de datos integrada y exportación profesional.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
