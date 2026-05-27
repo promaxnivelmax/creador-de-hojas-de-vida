@@ -5,6 +5,7 @@ import ConversationalForm from "./components/ConversationalForm";
 import ResumeRenderer from "./components/ResumeRenderer";
 import LandingPage from "./components/LandingPage";
 import LoginPage from "./components/LoginPage";
+import { supabase, getResumes, saveResumeToSupabase, deleteResumeFromSupabase } from "./lib/supabase";
 import { 
   FolderPlus, Layers, Database, Sparkles, 
   ArrowLeft, HelpCircle, FileText, ChevronRight, Info,
@@ -99,10 +100,8 @@ const DEFAULT_SAMPLE_RESUMES: Resume[] = [
 
 export default function App() {
   const [resumes, setResumes] = useState<Resume[]>([]);
-  // Initially evaluate if user is logged in
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem("ciber_user_authed") === "true";
-  });
+  const [user, setUser] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentView, setCurrentView] = useState<"landing" | "login" | "dashboard" | "wizard" | "renderer">("landing");
   const [editingResume, setEditingResume] = useState<Resume | null>(null);
   const [selectedResume, setSelectedResume] = useState<Resume | null>(null);
@@ -113,89 +112,164 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
 
-  // Check URL queries on load and hash updates to handle dynamic routing mimics
+  // Sync Supabase Auth active session on startup
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null);
+      setIsAuthenticated(!!session?.user);
+      setLoading(false);
+    }).catch(err => {
+      console.error("Error checking auth session", err);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+      setIsAuthenticated(!!session?.user);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Check URL queries on load and hash updates for dynamic public routing mimics
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const cvSlug = params.get("cv");
     if (cvSlug) {
       setPublicPortfolioSlug(cvSlug);
     } else {
-      // Direct view routing according to authentication state
-      if (!isAuthenticated) {
-        setCurrentView("landing");
-      } else {
+      if (isAuthenticated) {
         setCurrentView("dashboard");
+      } else {
+        setCurrentView("landing");
       }
     }
   }, [isAuthenticated]);
 
-  // Fetch resumes from backend Express server or fallback locally
-  const fetchResumesFromServer = async () => {
+  // Fetch resumes from Supabase or load empty
+  const fetchResumesFromSupabase = async () => {
     try {
       setLoading(true);
       setErrorMsg("");
-      const res = await fetch("/api/resumes");
-      if (!res.ok) throw new Error("Could not fetch resumes");
-      const data = await res.json();
-      setResumes(data);
-      setIsOffline(false);
-      
-      // Silently sync local copy
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
-      
-      // Select first resume as preview default if present and none already selected
-      if (data.length > 0 && !selectedPreviewId) {
-        setSelectedPreviewId(data[0].id);
-      }
 
-      // If a public portfolio query slug is present, auto-load that profile
+      // 1. If public portfolio CV query slug is present, load the requested profile instantly (public read permission)
       const params = new URLSearchParams(window.location.search);
       const cvSlug = params.get("cv");
       if (cvSlug) {
-        const matchingCv = data.find(
-          (r: Resume) => r.slug.toLowerCase() === cvSlug.toLowerCase() || r.id === cvSlug
-        );
-        if (matchingCv) {
-          setSelectedResume(matchingCv);
-          setCurrentView("renderer");
-        } else {
-          setErrorMsg(`CV profile '${cvSlug}' could not be located in database.`);
+        const { data, error } = await supabase
+          .from("resumes")
+          .select(`
+            *,
+            experiences (*),
+            education (*),
+            skills (*),
+            references (*)
+          `)
+          .eq("slug", cvSlug);
+
+        if (error) {
+          throw error;
         }
+
+        if (data && data.length > 0) {
+          const row = data[0];
+          // Map backend relational format back into proper Resume structural object
+          const publicCv: Resume = {
+            id: row.id,
+            slug: row.slug,
+            name: row.name,
+            nombres: row.nombres || row.name.split(" ")[0] || "",
+            apellidos: row.apellidos || row.name.split(" ").slice(1).join(" ") || "",
+            identificacion: row.identificacion || "",
+            lugar_expedicion: row.lugar_expedicion || "",
+            fecha_nacimiento: row.fecha_nacimiento || "",
+            lugar_nacimiento: row.lugar_nacimiento || "",
+            estado_civil: row.estado_civil || "",
+            celular: row.phone || row.celular || "",
+            correo: row.email || row.correo || "",
+            direccion: row.direccion || "",
+            barrio: row.barrio || "",
+            ciudad: row.city || row.ciudad || "",
+            position: row.position || "",
+            photo_url: row.photo_url || "",
+            city: row.city || "",
+            country: row.country || "",
+            email: row.email || "",
+            phone: row.phone || "",
+            website: row.website || "",
+            summary: row.summary || "",
+            created_at: row.created_at,
+            experiences: (row.experiences || []).map((exp: any) => ({
+              id: exp.id,
+              role: exp.role,
+              company: exp.company,
+              start_date: exp.start_date,
+              end_date: exp.end_date || "",
+              current: exp.current || false,
+              description: exp.description || "",
+              ciudad: exp.ciudad || ""
+            })),
+            education: (row.education || []).map((edu: any) => ({
+              id: edu.id,
+              degree: edu.degree,
+              school: edu.school,
+              start_date: edu.start_date,
+              end_date: edu.end_date || "",
+              current: edu.current || false,
+              description: edu.description || "",
+              ciudad: edu.ciudad || ""
+            })),
+            skills: (row.skills || []).map((sk: any) => ({
+              id: sk.id,
+              name: sk.name,
+              level: sk.level || 0
+            })),
+            references: (row.references || []).map((ref: any) => ({
+              id: ref.id,
+              name: ref.name,
+              role: ref.role || ref.relationship || "",
+              phone: ref.contact_info || ref.phone || "",
+              ciudad: ref.ciudad || ""
+            }))
+          };
+          setSelectedResume(publicCv);
+          setCurrentView("renderer");
+          return;
+        } else {
+          setErrorMsg(`La hoja de vida con el enlace '${cvSlug}' no existe en la base de datos de Supabase.`);
+        }
+      }
+
+      // 2. Load resumes of authenticated user
+      if (user) {
+        const list = await getResumes(user.id);
+        setResumes(list);
+        setIsOffline(false);
+        localStorage.setItem(`${LOCAL_STORAGE_KEY}_${user.id}`, JSON.stringify(list));
+
+        if (list.length > 0 && !selectedPreviewId) {
+          setSelectedPreviewId(list[0].id);
+        }
+      } else {
+        setResumes([]);
       }
     } catch (err: any) {
-      console.warn("Express server not found, falling back to secure Local Storage mode.", err);
+      console.warn("Express / Supabase offline fallback loading", err);
       setIsOffline(true);
-      
-      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-      let dataList: Resume[] = [];
-      if (stored) {
-        try {
-          dataList = JSON.parse(stored);
-        } catch (e) {
-          console.error("Failed to parse stored resumes", e);
-        }
-      }
-      
-      if (!dataList || dataList.length === 0) {
-        dataList = DEFAULT_SAMPLE_RESUMES;
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataList));
-      }
-
-      setResumes(dataList);
-      
-      if (dataList.length > 0 && !selectedPreviewId) {
-        setSelectedPreviewId(dataList[0].id);
-      }
-
-      const params = new URLSearchParams(window.location.search);
-      const cvSlug = params.get("cv");
-      if (cvSlug) {
-        const matchingCv = dataList.find(
-          (r: Resume) => r.slug.toLowerCase() === cvSlug.toLowerCase() || r.id === cvSlug
-        );
-        if (matchingCv) {
-          setSelectedResume(matchingCv);
-          setCurrentView("renderer");
+      if (user) {
+        const stored = localStorage.getItem(`${LOCAL_STORAGE_KEY}_${user.id}`);
+        if (stored) {
+          try {
+            const list = JSON.parse(stored);
+            setResumes(list);
+            if (list.length > 0 && !selectedPreviewId) {
+              setSelectedPreviewId(list[0].id);
+            }
+          } catch (e) {
+            setResumes([]);
+          }
         }
       }
     } finally {
@@ -204,98 +278,65 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchResumesFromServer();
-  }, [publicPortfolioSlug]);
+    // Re-fetch only if user session is known or public slug is present
+    if (user || publicPortfolioSlug) {
+      fetchResumesFromSupabase();
+    } else {
+      setResumes([]);
+      setLoading(false);
+    }
+  }, [user, publicPortfolioSlug]);
 
   // Create or Update resume
   const handleSaveResume = async (resume: Resume) => {
-    const pNombres = resume.nombres || resume.name || "Sin nombres";
-    const pApellidos = resume.apellidos || "";
-    const pFullName = resume.name || `${pNombres} ${pApellidos}`.trim();
-    const pPosition = resume.position || "Profesional";
-
-    // Standardize IDs
-    const id = resume.id || Math.random().toString(36).substring(2, 11);
-    const rawSlug = pFullName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    
-    let slug = rawSlug || "perfil";
-    let slugCount = 1;
-    while (resumes.some(r => r.id !== id && r.slug === slug)) {
-      slug = `${rawSlug}-${slugCount++}`;
+    if (!user) {
+      alert("Debes iniciar sesión con tu cuenta de Supabase de Barrancabermeja para guardar cambios.");
+      return;
     }
 
-    const cleanedResume: Resume = {
-      ...resume,
-      id,
-      slug,
-      name: pFullName,
-      nombres: pNombres,
-      apellidos: pApellidos,
-      position: pPosition,
-      created_at: resume.created_at || new Date().toISOString(),
-    };
-
-    // Update in local state right away
-    const updated = [...resumes];
-    const existingIndex = updated.findIndex(r => r.id === id);
-    if (existingIndex !== -1) {
-      updated[existingIndex] = cleanedResume;
-    } else {
-      updated.push(cleanedResume);
+    try {
+      setLoading(true);
+      const saved = await saveResumeToSupabase(resume, user.id);
+      
+      // Update local set and sync view
+      await fetchResumesFromSupabase();
+      setSelectedResume(saved);
+      setCurrentView("renderer");
+      setEditingResume(null);
+    } catch (err: any) {
+      console.error("Error saving resume to Supabase:", err);
+      alert("Error guardando el documento en Supabase: " + (err.message || err));
+    } finally {
+      setLoading(false);
     }
-
-    setResumes(updated);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
-
-    if (!isOffline) {
-      try {
-        const res = await fetch("/api/resumes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(cleanedResume)
-        });
-        if (res.ok) {
-          const savedData = await res.json();
-          await fetchResumesFromServer();
-          setSelectedResume(savedData);
-          setCurrentView("renderer");
-          setEditingResume(null);
-          return;
-        }
-      } catch (err: any) {
-        console.warn("Failed remote POST, saved locally:", err);
-        setIsOffline(true);
-      }
-    }
-
-    setSelectedResume(cleanedResume);
-    setCurrentView("renderer");
-    setEditingResume(null);
   };
 
   // Delete resume
   const handleDeleteResume = async (id: string) => {
-    const confirmation = window.confirm("¿Está seguro de que desea eliminar permanentemente esta hoja de vida?");
+    const confirmation = window.confirm("¿Está seguro de que desea eliminar permanentemente esta hoja de vida de Supabase?");
     if (!confirmation) return;
 
-    const remaining = resumes.filter(r => r.id !== id);
-    setResumes(remaining);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remaining));
-
-    if (selectedPreviewId === id) {
-      setSelectedPreviewId(remaining[0]?.id || null);
+    if (!user) {
+      alert("No estás autenticado.");
+      return;
     }
 
-    if (!isOffline) {
-      try {
-        const res = await fetch(`/api/resumes/${id}`, {
-          method: "DELETE"
-        });
-        if (!res.ok) throw new Error("Deletion failed");
-      } catch (err: any) {
-        console.warn("Could not delete remotely, deleted locally:", err);
-        setIsOffline(true);
+    try {
+      setLoading(true);
+      await deleteResumeFromSupabase(id, user.id);
+      
+      const remaining = resumes.filter(r => r.id !== id);
+      setResumes(remaining);
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_${user.id}`, JSON.stringify(remaining));
+
+      if (selectedPreviewId === id) {
+        setSelectedPreviewId(remaining[0]?.id || null);
       }
+    } catch (err: any) {
+      console.error("Error deleting resume from Supabase:", err);
+      alert("Error eliminando el documento en Supabase: " + (err.message || err));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -317,7 +358,6 @@ export default function App() {
   };
 
   const handleReturnToDashboard = () => {
-    // Clean up query param if they wish to return to dashboard
     if (window.location.search.includes("cv=")) {
       window.history.pushState({}, "", window.location.pathname);
     }
@@ -327,8 +367,12 @@ export default function App() {
     setIsSidebarOpen(false);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("ciber_user_authed");
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Signout error:", error);
+    }
+    setUser(null);
     setIsAuthenticated(false);
     setCurrentView("landing");
   };
@@ -495,6 +539,11 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3">
+              {user?.email && (
+                <span className="text-[11px] font-sans text-stone-600 bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200 font-semibold max-w-[160px] truncate sm:max-w-none">
+                  👤 {user.email}
+                </span>
+              )}
               <span className="text-xs font-mono text-stone-400 hidden sm:inline-block">Año: 2026</span>
               <button
                 onClick={handleLogout}
@@ -518,7 +567,7 @@ export default function App() {
               <h3 className="font-bold text-rose-800 font-display">Error de Sincronización</h3>
               <p className="text-xs text-rose-600 leading-relaxed">{errorMsg}</p>
               <button
-                onClick={() => { setErrorMsg(""); fetchResumesFromServer(); }}
+                onClick={() => { setErrorMsg(""); fetchResumesFromSupabase(); }}
                 className="bg-white border border-rose-200 hover:bg-rose-100 text-rose-700 px-4 py-2 rounded-lg text-xs font-semibold transition"
               >
                 Reconectar Base de Datos

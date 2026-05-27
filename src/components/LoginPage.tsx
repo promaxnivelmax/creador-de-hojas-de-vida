@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Lock, Mail, ChevronRight, MapPin, Sparkles, AlertCircle } from "lucide-react";
+import { Lock, Mail, ChevronRight, MapPin, Sparkles, AlertCircle, Eye, EyeOff, UserPlus } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -7,23 +8,99 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLoginSuccess, onGoBack }: LoginPageProps) {
+  const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    
-    // Simulate instantaneous authentication connection that succeeds automatically
-    setTimeout(() => {
-      setLoading(false);
-      onLoginSuccess();
-    }, 600);
+    setLoading(false);
+    setErrorMsg("");
+    setInfoMsg("");
+
+    if (!email || !password) {
+      setErrorMsg("Por favor, completa todos los campos.");
+      return;
+    }
+
+    if (isRegistering) {
+      if (password.length < 6) {
+        setErrorMsg("La contraseña debe tener al menos 6 caracteres.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg("Las contraseñas no coinciden. Por favor, verifícalas.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data.user && data.session) {
+          // Signed up and logged in automatically
+          setInfoMsg("¡Cuenta creada con éxito!");
+          setTimeout(() => {
+            onLoginSuccess();
+          }, 1000);
+        } else if (data.user) {
+          // Confirmation email configured/required
+          setInfoMsg("¡Registro exitoso! Por favor revisa tu correo electrónico para confirmar la cuenta.");
+          setIsRegistering(false);
+          setPassword("");
+          setConfirmPassword("");
+        }
+      } catch (err: any) {
+        console.error("Error al registrarse: ", err);
+        setErrorMsg(err.message || "No se pudo crear la cuenta de usuario. Inténtalo de nuevo.");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data.session) {
+          onLoginSuccess();
+        } else {
+          setErrorMsg("Surgió un error obteniendo la sesión activa.");
+        }
+      } catch (err: any) {
+        console.error("Error al iniciar sesión: ", err);
+        setErrorMsg(
+          err.message === "Invalid login credentials" || err.message?.toLowerCase().includes("credentials")
+            ? "Contraseña o correo electrónico incorrectos. Compruébalos y vuelve a intentar."
+            : err.message || "Ocurrió un error inesperado al iniciar sesión."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   return (
-    <div className="min-h-screen bg-stone-105 font-sans flex items-center justify-center relative overflow-hidden px-4 py-8" id="login-container">
+    <div className="min-h-screen bg-stone-50 font-sans flex items-center justify-center relative overflow-hidden px-4 py-8" id="login-container">
       
       {/* 
         PRECISE SYSTEM ARTWORK: TRANSLUCENT GRAY CROQUIS MAP OF BARRANCABERMEJA, COLOMBIA 
@@ -136,12 +213,28 @@ export default function LoginPage({ onLoginSuccess, onGoBack }: LoginPageProps) 
         </div>
 
         {/* Right column: Facebook style Box Card */}
-        <div className="md:col-span-6 flex flex-col items-center">
+        <div className="md:col-span-6 flex flex-col items-center w-full">
           <div className="bg-white w-full rounded-2xl border border-stone-200 shadow-xl p-6 md:p-8 space-y-5">
             <div className="text-center md:text-left border-b border-stone-100 pb-3">
-              <span className="text-[10px] font-mono tracking-widest uppercase font-bold text-amber-600">Conexión Segura</span>
-              <h4 className="font-black text-lg text-stone-900">Iniciar Sesión</h4>
+              <span className="text-[10px] font-mono tracking-widest uppercase font-bold text-amber-600">Base de Datos Supabase Activa</span>
+              <h4 className="font-black text-xl text-stone-900 mt-1">
+                {isRegistering ? "Registro de Cuenta" : "Iniciar Sesión"}
+              </h4>
             </div>
+
+            {errorMsg && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl flex items-start gap-2 text-xs">
+                <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={14} />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            {infoMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-start gap-2 text-xs">
+                <Sparkles className="text-emerald-500 shrink-0 mt-0.5" size={14} />
+                <span>{infoMsg}</span>
+              </div>
+            )}
 
             <form onSubmit={handleFormSubmit} className="space-y-4">
               <div className="space-y-1">
@@ -151,10 +244,10 @@ export default function LoginPage({ onLoginSuccess, onGoBack }: LoginPageProps) 
                   <input
                     type="email"
                     required
-                    placeholder="Ingresa tu correo o usuario"
+                    placeholder="ejemplo@correo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-4 py-3 text-xs md:text-sm outline-none focus:bg-white focus:ring-4 focus:ring-amber-400/10 focus:border-amber-400 transition text-stone-900"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-4 py-3 text-xs outline-none focus:bg-white focus:ring-4 focus:ring-amber-400/10 focus:border-amber-400 transition text-stone-900"
                   />
                 </div>
               </div>
@@ -164,54 +257,85 @@ export default function LoginPage({ onLoginSuccess, onGoBack }: LoginPageProps) 
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-3.5 text-stone-400" size={14} />
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     required
-                    placeholder="Ingresa tu clave de ingreso"
+                    placeholder={isRegistering ? "Mínimo 6 caracteres" : "Ingresa tu clave de ingreso"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-4 py-3 text-xs md:text-sm outline-none focus:bg-white focus:ring-4 focus:ring-amber-400/10 focus:border-amber-400 transition text-stone-900"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-10 py-3 text-xs outline-none focus:bg-white focus:ring-4 focus:ring-amber-400/10 focus:border-amber-400 transition text-stone-900"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-3.5 text-stone-400 hover:text-stone-600 transition"
+                  >
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
                 </div>
               </div>
+
+              {isRegistering && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono uppercase text-stone-500 block font-semibold">Confirmar Contraseña</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-3.5 text-stone-400" size={14} />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      placeholder="Repite tu contraseña exactamente"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-4 py-3 text-xs outline-none focus:bg-white focus:ring-4 focus:ring-amber-400/10 focus:border-amber-400 transition text-stone-900"
+                    />
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-stone-900 hover:bg-stone-800 text-white font-bold py-3.5 px-4 rounded-xl text-xs md:text-sm tracking-wide shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full bg-stone-900 hover:bg-stone-800 text-white font-bold py-3.5 px-4 rounded-xl text-xs tracking-wide shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-stone-200 border-t-white rounded-full animate-spin"></div>
                 ) : (
-                  <>Ingresar Seguro <ChevronRight size={15} /></>
+                  <>
+                    {isRegistering ? "Registrarme y Empezar" : "Ingresar Seguro"} <ChevronRight size={15} />
+                  </>
                 )}
               </button>
             </form>
 
-            <div className="text-center">
+            <div className="text-center pt-2">
               <button
                 type="button"
-                onClick={onLoginSuccess}
-                className="text-stone-400 hover:text-amber-600 transition text-[10px] md:text-xs hover:underline decoration-dashed"
+                onClick={() => {
+                  setIsRegistering(!isRegistering);
+                  setErrorMsg("");
+                  setInfoMsg("");
+                }}
+                className="text-amber-700 hover:text-amber-800 font-bold transition text-xs hover:underline decoration-dashed"
               >
-                ¿Olvidaste tu contraseña? Da clic aquí para entrar directamente
+                {isRegistering 
+                  ? "¿Ya tienes una cuenta registrada? Inicia Sesión aquí" 
+                  : "¿No tienes una cuenta aún? Regístrate aquí gratis"}
               </button>
             </div>
 
-            <div className="border-t border-stone-100 pt-5">
+            <div className="border-t border-stone-100 pt-4 flex flex-col items-center">
+              <span className="text-[10px] text-stone-400 uppercase font-mono tracking-widest block mb-2">Alternativas</span>
               <button
                 type="button"
-                onClick={onLoginSuccess}
-                className="w-fit mx-auto block bg-[#42b72a] hover:bg-[#36a420] text-white font-bold py-3 px-6 rounded-xl text-xs transition cursor-pointer shadow-xs"
+                onClick={() => {
+                  setIsRegistering(!isRegistering);
+                  setErrorMsg("");
+                  setInfoMsg("");
+                }}
+                className="w-full block bg-[#42b72a] hover:bg-[#36a420] text-white font-bold py-3 px-6 rounded-xl text-xs transition cursor-pointer text-center"
               >
-                Crear una cuenta nueva (Acceso Gratuito)
+                {isRegistering ? "Ir a la vista de Ingreso" : "Registrar una nueva Cuenta"}
               </button>
             </div>
-          </div>
-
-          <div className="mt-4 text-center">
-            <p className="text-[10px] md:text-xs text-stone-500">
-              <strong className="text-stone-700">Acceso Libre:</strong> Usa cualquier correo o contraseña de prueba para ingresar instantáneamente al panel.
-            </p>
           </div>
         </div>
       </div>
