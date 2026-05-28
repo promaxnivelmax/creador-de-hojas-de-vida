@@ -22,6 +22,7 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
     { title: "Estudios Realizados", subtitle: "Registra tus logros académicos (secundaria, técnicos, universitarios, etc.)", icon: GraduationCap },
     { title: "Perfil y Resumen", subtitle: "Breve descripción de tu perfil profesional y cargo", icon: FileText },
     { title: "Experiencia Laboral", subtitle: "Empresas, cargos y fechas de trabajo", icon: Briefcase },
+    { title: "Habilidades y Destrezas", subtitle: "Registra tus fortalezas o conocimientos técnicos", icon: Award },
     { title: "Referencias", subtitle: "Personas de contacto que certifican tus capacidades", icon: Award }
   ];
 
@@ -131,6 +132,9 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
   const [tempEdu, setTempEdu] = useState<Partial<Education>>({
     school: "", degree: "", start_date: "", ciudad: ""
   });
+
+  const [tempSkillName, setTempSkillName] = useState("");
+  const [tempSkillLevel, setTempSkillLevel] = useState(85);
 
   const progressPercentage = Math.round(((currentStep + 1) / STEPS.length) * 100);
 
@@ -285,6 +289,10 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
   };
 
   const addExperience = () => {
+    if ((resumeData.experiences || []).length >= 5) {
+      alert("Puedes registrar un máximo de 5 experiencias laborales en tu hoja de vida para asegurar un diseño limpio y ordenado.");
+      return;
+    }
     if (!tempExp.company || !tempExp.role) {
       alert("La Empresa y el Cargo son campos obligatorios.");
       return;
@@ -328,6 +336,10 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
   };
 
   const addEducation = () => {
+    if ((resumeData.education || []).length >= 5) {
+      alert("Puedes registrar un máximo de 5 logros académicos en tu hoja de vida para asegurar un diseño limpio y ordenado.");
+      return;
+    }
     if (!tempEdu.school || !tempEdu.degree) {
       alert("El Nombre de la Institución y el Título Obtenido son de carácter obligatorio.");
       return;
@@ -349,6 +361,48 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
   const removeEducation = (id: string) => {
     updateField("education", (resumeData.education || []).filter(e => e.id !== id));
   };
+
+  const addSkill = () => {
+    if (!tempSkillName.trim()) {
+      alert("Por favor, escribe el nombre de la habilidad o destreza.");
+      return;
+    }
+    if ((resumeData.skills || []).length >= 8) {
+      alert("Puedes agregar un máximo de 8 habilidades o destrezas para mantener un diseño visual equilibrado.");
+      return;
+    }
+    const newSkill: Skill = {
+      id: "sk-" + Math.random().toString(36).substring(2, 9),
+      name: tempSkillName.trim(),
+      level: tempSkillLevel
+    };
+    updateField("skills", [...(resumeData.skills || []), newSkill]);
+    setTempSkillName("");
+    setTempSkillLevel(85);
+  };
+
+  const removeSkill = (id: string) => {
+    updateField("skills", (resumeData.skills || []).filter(s => s.id !== id));
+  };
+
+  const PROFILE_PRESETS = [
+    {
+      title: "Administrativo & Recepción",
+      text: "Auxiliar administrativo con sólida orientación al detalle y vocación de servicio al cliente. Experiencia desempeñando labores de atención telefónica o presencial, radicación de documentos, control de archivo físico y digital y manejo de herramientas de Microsoft Office. Me caracterizo por mi puntualidad, amabilidad, proactividad y disposición para trabajar en entornos dinámicos organizados."
+    },
+    {
+      title: "Servicios Generales / Aseo",
+      text: "Auxiliar de servicios generales y aseo con gran sentido de la responsabilidad, honestidad y meticulosidad. Experiencia comprobada en limpieza periódica y desinfección de oficinas, bodegas o áreas residenciales, garantizando un ambiente saludable e impecable. Persona puntual con alta disposición y adaptación rápida al cumplimiento riguroso de tareas asignadas."
+    },
+    {
+      title: "Operario / Logística / Bodega",
+      text: "Operario técnico con amplia experiencia en procesos logísticos de almacenamiento, cargue y descargue, despacho de mercancías y control de inventarios. Capacidad física óptima, riguroso seguimiento de normas de seguridad industrial, trabajo coordinado bajo presión y puntualidad intachable en el cumplimiento de turnos."
+    },
+    {
+      title: "Asesor Técnico / Mantenimiento",
+      text: "Técnico preparado con amplias destrezas analíticas para el mantenimiento preventivo y correctivo. Experiencia de campo diagnosticando fallas de manera ágil y honesta. Caracterizado por una alta ética, cumplimiento escrupuloso de los tiempos de entrega pactados y excelente disposición al aprendizaje continuo."
+    }
+  ];
 
   const CurrentIcon = STEPS[currentStep].icon;
 
@@ -835,6 +889,37 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
                       rows={5}
                       className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs leading-relaxed focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand outline-none transition text-stone-900"
                     />
+
+                    {/* Presets Block */}
+                    <div className="mt-4 p-4 bg-amber-50/50 rounded-xl border border-amber-200/40">
+                      <p className="text-xs font-bold text-stone-850 flex items-center gap-1.5 mb-2.5">
+                        <Sparkles size={13} className="text-amber-600" /> ¿No sabes qué escribir? Elige un ejemplo predeterminado para tu perfil:
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {PROFILE_PRESETS.map((preset) => (
+                          <button
+                            key={preset.title}
+                            type="button"
+                            onClick={() => {
+                              if (!resumeData.summary || window.confirm("¿Deseas reemplazar tu texto actual con esta plantilla de ejemplo?")) {
+                                updateField("summary", preset.text);
+                              }
+                            }}
+                            className="bg-white hover:bg-stone-50 border border-stone-200 p-2.5 text-left rounded-xl transition text-xs flex flex-col justify-between group cursor-pointer hover:border-amber-400"
+                          >
+                            <span className="font-bold text-stone-900 text-[11px] group-hover:text-amber-800 transition block mb-1">
+                              {preset.title}
+                            </span>
+                            <span className="text-[10px] text-stone-500 line-clamp-2 leading-relaxed">
+                              {preset.text}
+                            </span>
+                            <span className="text-[9px] text-amber-700 font-bold mt-1.5 block hover:underline">
+                              Hacer clic para usar 📝
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -947,8 +1032,105 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
                 </div>
               )}
 
-              {/* Paso 7: Referencias */}
+              {/* Paso 7: Habilidades y Destrezas */}
               {currentStep === 6 && (
+                <div className="space-y-5" id="step-skills-details">
+                  {/* Current list of skills */}
+                  {resumeData.skills && resumeData.skills.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 p-1 max-h-44 overflow-y-auto">
+                      {resumeData.skills.map((sk) => (
+                        <div 
+                          key={sk.id} 
+                          className="inline-flex items-center gap-2 bg-stone-900 text-white pl-3.5 pr-2 py-1.5 rounded-full text-xs font-semibold shadow-xs"
+                        >
+                          <span>{sk.name}</span>
+                          <span className="text-[10px] bg-amber-400 text-stone-950 px-1.5 py-0.5 rounded-full font-bold">
+                            {sk.level}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeSkill(sk.id)}
+                            className="p-0.5 hover:bg-stone-800 text-stone-300 hover:text-rose-400 rounded-full transition cursor-pointer"
+                            title="Quitar habilidad"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-stone-50 border border-stone-200 p-6 rounded-2xl text-center space-y-1.5">
+                      <p className="text-xs text-stone-500 font-bold">No has registrado habilidades aún.</p>
+                      <p className="text-[10px] text-stone-400">Agrega tus habilidades principales a continuación para resaltarlas en tu hoja de vida.</p>
+                    </div>
+                  )}
+
+                  {/* Addition Box */}
+                  <div className="bg-stone-50/50 p-4 rounded-xl border border-stone-205 border-dashed space-y-4">
+                    <p className="text-xs font-bold text-stone-850">Agregar Habilidad o Destreza técnica:</p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+                      <div className="sm:col-span-7 space-y-1">
+                        <label className="text-[10px] font-mono uppercase text-stone-500 block font-semibold">Nombre de Habilidad *</label>
+                        <input
+                          type="text"
+                          placeholder="Ej. Servicio al Cliente, Trabajo en Equipo, Excel, Aseo"
+                          value={tempSkillName}
+                          onChange={(e) => setTempSkillName(e.target.value)}
+                          className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand text-stone-900"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-4 space-y-1">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-mono uppercase text-stone-500 block font-semibold">Nivel de Dominio</label>
+                          <span className="text-[11px] font-bold text-amber-700">{tempSkillLevel}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="20"
+                          max="100"
+                          step="5"
+                          value={tempSkillLevel}
+                          onChange={(e) => setTempSkillLevel(Number(e.target.value))}
+                          className="w-full accent-amber-500 h-1.5 bg-stone-200 rounded-lg cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={addSkill}
+                      className="w-full bg-stone-900 text-white font-bold py-2.5 px-3 rounded-lg text-xs hover:bg-stone-800 transition flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={13} className="text-brand" /> Agregar Habilidad a mi Currículum
+                    </button>
+
+                    {/* Predefined suggestion pills to ease writing */}
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[10px] font-mono uppercase text-stone-400 font-bold">💡 Habilidades sugeridas (Toca para agregar):</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["Trabajo en equipo", "Atención al Cliente", "Puntualidad", "Honestidad", "Manejo de computadores", "Resolución de problemas", "Proactividad"].map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => {
+                              setTempSkillName(s);
+                              setTempSkillLevel(90);
+                            }}
+                            className="bg-white hover:bg-amber-100 border border-stone-200 text-stone-700 hover:text-stone-900 px-2 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer"
+                          >
+                            + {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Paso 8: Referencias */}
+              {currentStep === 7 && (
                 <div className="space-y-4" id="step-references-details">
                   {/* Current reference lists added */}
                   {resumeData.references && resumeData.references.length > 0 && (

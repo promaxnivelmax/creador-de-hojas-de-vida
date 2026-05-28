@@ -154,7 +154,7 @@ export default function LoginPage({ onLoginSuccess, onGoBack }: LoginPageProps) 
         <div className="md:col-span-6 flex flex-col items-center w-full">
           <div className="bg-white w-full rounded-2xl border border-stone-200 shadow-xl p-6 md:p-8 space-y-5">
             <div className="text-center md:text-left border-b border-stone-100 pb-3">
-              <span className="text-[10px] font-mono tracking-widest uppercase font-bold text-amber-600">Base de Datos Supabase Activa</span>
+              <span className="text-[10px] font-mono tracking-widest uppercase font-bold text-amber-600">Conectado al Sistema Seguro</span>
               <h4 className="font-black text-xl text-stone-900 mt-1">
                 {isRegistering ? "Registro de Cuenta" : "Iniciar Sesión"}
               </h4>

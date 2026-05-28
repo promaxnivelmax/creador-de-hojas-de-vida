@@ -97,49 +97,160 @@ body {
 
 /* Print Specific Overrides */
 @media print {
-  /* Hide interactive margins of browser */
+  /* Set standard A4 page with no margins for perfect border control */
   @page {
-    margin: 1cm;
-    size: auto;
+    margin: 0;
+    size: A4 portrait;
   }
   
-  /* Hide any non-printable tools */
+  /* Reset body and html margins */
+  body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    background-color: white !important;
+    color: black !important;
+    overflow: visible !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  /* Hide all non-printable items */
   .no-print {
     display: none !important;
   }
   
-  /* Ensure backgrounds render during printing */
-  body {
-    background-color: white !important;
-    color: black !important;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+  /* Complete isolation: Reset all parent containers so the resume canvas is full-page */
+  #applet-primary-layout, 
+  #main-view-canvas, 
+  #view-dispatcher, 
+  #resume-renderer-outer {
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  /* Make sure the main printable sheet adapts cleanly to portrait dimensions */
+  #cv-printable-sheet {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    page-break-after: avoid !important;
   }
 
   .print-card-shadow {
     box-shadow: none !important;
-    border: 1px solid #e2e8f0 !important;
+    border: none !important;
   }
 
-  /* Force multi-column layout to render side-by-side if supported */
+  /* Force multi-column layout to render side-by-side inside print grid */
   .print-row {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
-    gap: 1.5rem !important;
+    min-height: 297mm !important;
   }
 
   .print-col-3 {
-    width: 33.333% !important;
+    width: 35% !important;
+    min-width: 35% !important;
+    max-width: 35% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    background-color: #fafaf9 !important; /* Force beautiful warm grey background side panel in print */
   }
 
   .print-col-9 {
-    width: 66.666% !important;
+    width: 65% !important;
+    min-width: 65% !important;
+    max-width: 65% !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
-  /* Avoid splitting experiences midway */
+  /* Avoid splitting individual fields midway */
   .print-avoid-break {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 }
+
+/* Custom highly animated logo loaders */
+@keyframes letter-draw {
+  0% {
+    transform: scale(0.8) rotate(-12deg);
+    opacity: 0.5;
+    border-radius: 16px;
+  }
+  50% {
+    transform: scale(1.15) rotate(8deg);
+    opacity: 0.95;
+    border-radius: 8px;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+    border-radius: 12px;
+  }
+}
+
+@keyframes shape-rebuild {
+  0% {
+    transform: rotate(0deg) scale(0.9);
+    border-width: 2px;
+    border-color: #ffc132;
+  }
+  33% {
+    transform: rotate(120deg) scale(1.1);
+    border-radius: 40% 60% 70% 30% / 40% 60% 40% 60%;
+    border-width: 4px;
+    border-color: #f59e0b;
+  }
+  66% {
+    transform: rotate(240deg) scale(0.95);
+    border-radius: 60% 40% 50% 50% / 30% 60% 40% 70%;
+    border-width: 3px;
+    border-color: #cc9410;
+  }
+  100% {
+    transform: rotate(360deg) scale(0.9);
+    border-width: 2px;
+    border-color: #ffc132;
+  }
+}
+
+@keyframes bar-expand-contract {
+  0%, 100% {
+    transform: scaleX(0.7);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleX(1.3);
+    opacity: 1;
+  }
+}
+
+.animate-letter-draw {
+  animation: letter-draw 2.5s ease-in-out infinite alternate;
+}
+
+.animate-shape-rebuild {
+  animation: shape-rebuild 5s linear infinite;
+}
+
+.animate-bar-expand-contract {
+  animation: bar-expand-contract 1.8s ease-in-out infinite;
+}
+

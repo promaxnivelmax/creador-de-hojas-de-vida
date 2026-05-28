@@ -290,7 +290,7 @@ export default function App() {
   // Create or Update resume
   const handleSaveResume = async (resume: Resume) => {
     if (!user) {
-      alert("Debes iniciar sesión con tu cuenta de Supabase para guardar cambios.");
+      alert("Debes iniciar sesión con tu cuenta para guardar cambios.");
       return;
     }
 
@@ -304,8 +304,8 @@ export default function App() {
       setCurrentView("renderer");
       setEditingResume(null);
     } catch (err: any) {
-      console.error("Error saving resume to Supabase:", err);
-      alert("Error guardando el documento en Supabase: " + (err.message || err));
+      console.error("Error saving resume:", err);
+      alert("Error al guardar el documento: " + (err.message || err));
     } finally {
       setLoading(false);
     }
@@ -313,7 +313,7 @@ export default function App() {
 
   // Delete resume
   const handleDeleteResume = async (id: string) => {
-    const confirmation = window.confirm("¿Está seguro de que desea eliminar permanentemente esta hoja de vida de Supabase?");
+    const confirmation = window.confirm("¿Está seguro de que desea eliminar permanentemente esta hoja de vida?");
     if (!confirmation) return;
 
     if (!user) {
@@ -333,8 +333,8 @@ export default function App() {
         setSelectedPreviewId(remaining[0]?.id || null);
       }
     } catch (err: any) {
-      console.error("Error deleting resume from Supabase:", err);
-      alert("Error eliminando el documento en Supabase: " + (err.message || err));
+      console.error("Error deleting resume:", err);
+      alert("Error al eliminar el documento: " + (err.message || err));
     } finally {
       setLoading(false);
     }
@@ -519,21 +519,6 @@ export default function App() {
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
                     <span className="text-xs font-semibold text-stone-700 font-display">Hojas de Vida Guardadas</span>
                   </div>
-                  {isOffline ? (
-                    <span 
-                      className="text-[10px] bg-amber-50 text-amber-850 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full font-mono font-bold select-none cursor-help shadow-2xs transition" 
-                      title="Los datos se guardan de forma segura en tu navegador (LocalStorage). Ideal para Vercel y GitHub Pages sin servidor."
-                    >
-                      💾 Almacenamiento Local Activo
-                    </span>
-                  ) : (
-                    <span 
-                      className="text-[10px] bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full font-mono font-bold select-none cursor-help shadow-2xs transition" 
-                      title="Los datos están listos para ser guardados en la nube utilizando el servidor de base de datos."
-                    >
-                      ☁️ Nube Sincronizada
-                    </span>
-                  )}
                 </div>
               )}
             </div>
@@ -544,7 +529,6 @@ export default function App() {
                   👤 {user.email}
                 </span>
               )}
-              <span className="text-xs font-mono text-stone-400 hidden sm:inline-block">Año: 2026</span>
               <button
                 onClick={handleLogout}
                 className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-[11px] py-1.5 px-3 rounded-lg transition border border-stone-205 cursor-pointer"
@@ -558,20 +542,58 @@ export default function App() {
         {/* View Port contents */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8" id="view-dispatcher">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-3 h-full">
-              <div className="w-10 h-10 border-4 border-stone-200 border-t-amber-400 rounded-full animate-spin"></div>
-              <p className="text-xs text-stone-400 font-mono">Sincronizando información segura...</p>
+            <div className="flex flex-col items-center justify-center py-24 gap-4 h-full text-center">
+              <div className="relative w-20 h-20 flex items-center justify-center mb-1">
+                {/* Outer shape rebuilding border */}
+                <div className="absolute inset-0 border-2 rounded-2xl animate-shape-rebuild"></div>
+                {/* Glowing brand icon base */}
+                <div className="absolute inset-2 bg-amber-400 rounded-xl flex items-center justify-center shadow-lg animate-letter-draw">
+                  <span className="text-stone-900 font-black text-2xl font-display">T</span>
+                </div>
+              </div>
+              <div className="space-y-1 bg-white/20 backdrop-blur-xs p-3 rounded-2xl">
+                <h3 className="font-bold text-sm tracking-tight text-stone-900">
+                  Trámites y Servicios
+                </h3>
+                <p className="text-[10px] text-stone-500 font-mono uppercase tracking-wider animate-pulse font-semibold">
+                  Cargando información segura...
+                </p>
+                {/* Micro expand contract bar */}
+                <div className="w-16 h-1 bg-stone-200 rounded-full mx-auto overflow-hidden mt-2">
+                  <div className="h-full bg-amber-500 rounded-full animate-bar-expand-contract"></div>
+                </div>
+              </div>
             </div>
           ) : errorMsg ? (
-            <div className="bg-rose-50 border border-rose-200 p-8 rounded-2xl max-w-md mx-auto text-center space-y-4 my-12 shadow-sm">
-              <h3 className="font-bold text-rose-800 font-display">Error de Sincronización</h3>
-              <p className="text-xs text-rose-600 leading-relaxed">{errorMsg}</p>
-              <button
-                onClick={() => { setErrorMsg(""); fetchResumesFromSupabase(); }}
-                className="bg-white border border-rose-200 hover:bg-rose-100 text-rose-700 px-4 py-2 rounded-lg text-xs font-semibold transition"
-              >
-                Reconectar Base de Datos
-              </button>
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center max-w-sm mx-auto space-y-6">
+              <div className="relative w-20 h-20 flex items-center justify-center">
+                {/* Attention outer border */}
+                <div className="absolute inset-0 border-2 border-stone-200 rounded-2xl animate-pulse"></div>
+                {/* Pale orange center badge */}
+                <div className="absolute inset-2 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 font-black text-2xl font-display shadow-xs border border-amber-200">
+                  !
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-display font-medium text-base text-stone-900">Hoja de Vida No Encontrada</h3>
+                <p className="text-xs text-stone-500 leading-relaxed">{errorMsg}</p>
+              </div>
+              <div className="flex flex-col gap-2 w-full">
+                <button
+                  type="button"
+                  onClick={() => { setErrorMsg(""); fetchResumesFromSupabase(); }}
+                  className="w-full bg-stone-900 hover:bg-stone-850 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer shadow-xs"
+                >
+                  Intentar Reconectar 🔄
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setErrorMsg(""); window.location.href = window.location.origin; }}
+                  className="w-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer"
+                >
+                  Volver al Inicio 🏠
+                </button>
+              </div>
             </div>
           ) : (
             <div className="h-full">

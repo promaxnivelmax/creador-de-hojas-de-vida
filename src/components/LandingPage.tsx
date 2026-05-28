@@ -52,18 +52,12 @@ export default function LandingPage({ onStart, onLogin }: LandingPageProps) {
         </div>
 
         {/* Call to actions with premium UI elements */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-md">
+        <div className="flex justify-center items-center w-full max-w-md">
           <button
             onClick={onStart}
-            className="w-full sm:w-auto bg-amber-400 hover:bg-amber-500 text-stone-900 font-bold py-3.5 px-8 rounded-xl text-xs uppercase tracking-wider transition duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-400/20 group scale-100 active:scale-95"
+            className="w-full sm:w-auto bg-stone-900 hover:bg-stone-800 text-white font-bold py-4 px-10 rounded-2xl text-xs uppercase tracking-wider transition duration-300 flex items-center justify-center gap-2.5 cursor-pointer shadow-lg shadow-stone-900/10 group scale-100 active:scale-95 border border-stone-800"
           >
-            Crear Mi Hoja de Vida <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-          </button>
-          <button
-            onClick={onLogin}
-            className="w-full sm:w-auto bg-white hover:bg-stone-100 text-stone-800 border border-stone-200 font-bold py-3.5 px-8 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer active:scale-95"
-          >
-            Acceso Directo
+            Comenzar Mi Hoja de Vida <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform text-amber-400" />
           </button>
         </div>
 
