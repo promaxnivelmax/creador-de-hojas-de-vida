@@ -94,6 +94,17 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
   // Initialize form state with exact Latin Colombia CV fields
   const [resumeData, setResumeData] = useState<Partial<Resume>>(() => {
     if (initialResume) return { ...initialResume };
+    
+    // Check if there is an autosaved draft in localStorage
+    try {
+      const saved = localStorage.getItem("tramites_servicios_cv_draft");
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Error reading CV draft from localStorage", e);
+    }
+
     return {
       nombres: "",
       apellidos: "",
@@ -136,7 +147,96 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
   const [tempSkillName, setTempSkillName] = useState("");
   const [tempSkillLevel, setTempSkillLevel] = useState(85);
 
-  const progressPercentage = Math.round(((currentStep + 1) / STEPS.length) * 100);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+  };
+
+  // Clear toast timeout safely
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Formatting and capitalization helpers
+  const formatTitleCase = (text: string): string => {
+    if (!text) return "";
+    const clean = text.trim();
+    if (!clean) return "";
+    return clean
+      .split(/\s+/)
+      .map(word => {
+        if (!word) return "";
+        // Keep acronyms like SENA, CC, UNE etc unchanged if typed fully capitalized and shorter than 5 chars
+        if (word === word.toUpperCase() && word.length <= 4) {
+          return word;
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(" ");
+  };
+
+  const formatSentenceCase = (text: string): string => {
+    if (!text) return "";
+    const clean = text.trim();
+    if (!clean) return "";
+    // If the input was shouting (all caps), normalize it
+    if (clean === clean.toUpperCase()) {
+      return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+    }
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  };
+
+  // Sorting helpers
+  const sortExperiencesByDate = (list: Experience[]): Experience[] => {
+    return [...list].sort((a, b) => {
+      if (a.current && !b.current) return -1;
+      if (!a.current && b.current) return 1;
+      
+      const dateA = a.start_date || "";
+      const dateB = b.start_date || "";
+      
+      const yearA = parseInt(dateA.match(/\d{4}/)?.[0] || "0", 10);
+      const yearB = parseInt(dateB.match(/\d{4}/)?.[0] || "0", 10);
+      
+      if (yearA !== yearB) {
+        return yearB - yearA; // Newest first
+      }
+      return dateB.localeCompare(dateA);
+    });
+  };
+
+  const sortEducationByDate = (list: Education[]): Education[] => {
+    return [...list].sort((a, b) => {
+      const dateA = a.start_date || "";
+      const dateB = b.start_date || "";
+      
+      const yearA = parseInt(dateA.match(/\d{4}/)?.[0] || "0", 10);
+      const yearB = parseInt(dateB.match(/\d{4}/)?.[0] || "0", 10);
+      
+      if (yearA !== yearB) {
+        return yearB - yearA; // Newest first
+      }
+      return dateB.localeCompare(dateA);
+    });
+  };
+
+  // Autosave draft dynamically to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem("tramites_servicios_cv_draft", JSON.stringify(resumeData));
+    } catch (e) {
+      console.error("Error saving CV draft", e);
+    }
+  }, [resumeData]);
+
+  const progressPercentage = Math.round(((currentStep + 1) / STEPS.length) * 105); // Just updated below to be dynamic based on STEPS length
+  const realProgressPercentage = Math.round(((currentStep + 1) / STEPS.length) * 100);
 
   // Quick helper to fill test data with Colombian template info
   const handleLoadTemplateData = () => {
@@ -223,7 +323,7 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
       const realNombres = resumeData.nombres?.trim() || "";
       const realApellidos = resumeData.apellidos?.trim() || "";
       if (!realNombres) {
-        alert("Por favor especifica los nombres del solicitante en el Paso 1.");
+        showToast("error", "Por favor especifica los nombres del solicitante en el Paso 1.");
         setCurrentStep(0);
         return;
       }
@@ -237,31 +337,38 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
         if (!alreadyExists) {
           finalEducation.push({
             id: "edu-" + Math.random().toString(36).substring(2, 9),
-            school: tempEdu.school,
-            degree: tempEdu.degree,
+            school: formatTitleCase(tempEdu.school || ""),
+            degree: formatTitleCase(tempEdu.degree || ""),
             start_date: tempEdu.start_date || "",
             end_date: tempEdu.start_date || "",
             current: false,
             description: "Estudios",
-            ciudad: tempEdu.ciudad || ""
+            ciudad: formatTitleCase(tempEdu.ciudad || "")
           });
         }
       }
 
       const generatedName = `${realNombres} ${realApellidos}`.trim();
 
+      // Clear the draft from localStorage on successful finish
+      try {
+        localStorage.removeItem("tramites_servicios_cv_draft");
+      } catch (e) {
+        console.error("Could not remove saved draft", e);
+      }
+
       onSave({
         ...resumeData,
         id: resumeData.id || "res-" + Math.random().toString(36).substring(2, 9),
         slug: resumeData.slug || generatedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "perfil",
         name: generatedName,
-        position: resumeData.position || "Profesora / Profesional",
-        city: resumeData.ciudad || "",
+        position: formatTitleCase(resumeData.position || "Profesora / Profesional"),
+        city: formatTitleCase(resumeData.ciudad || ""),
         email: resumeData.correo || "",
         phone: resumeData.celular || "",
         created_at: resumeData.created_at || new Date().toISOString(),
-        education: finalEducation,
-        experiences: resumeData.experiences || [],
+        education: sortEducationByDate(finalEducation),
+        experiences: sortExperiencesByDate(resumeData.experiences || []),
         references: resumeData.references || []
       } as Resume);
     }
@@ -290,99 +397,111 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
 
   const addExperience = () => {
     if ((resumeData.experiences || []).length >= 5) {
-      alert("Puedes registrar un máximo de 5 experiencias laborales en tu hoja de vida para asegurar un diseño limpio y ordenado.");
+      showToast("error", "Puedes registrar un máximo de 5 experiencias laborales en tu hoja de vida.");
       return;
     }
     if (!tempExp.company || !tempExp.role) {
-      alert("La Empresa y el Cargo son campos obligatorios.");
+      showToast("error", "Falta información obligatoria: Nombre de Empresa y Cargo son necesarios.");
       return;
     }
     const newExp: Experience = {
-      id: Math.random().toString(),
-      company: tempExp.company || "",
-      role: tempExp.role || "",
+      id: "exp-" + Math.random().toString(36).substring(2, 9),
+      company: formatTitleCase(tempExp.company || ""),
+      role: formatTitleCase(tempExp.role || ""),
       start_date: tempExp.start_date || "",
       end_date: tempExp.current ? "Actual" : (tempExp.end_date || ""),
       current: tempExp.current || false,
-      description: tempExp.description || "",
-      ciudad: tempExp.ciudad || ""
+      description: formatSentenceCase(tempExp.description || ""),
+      ciudad: formatTitleCase(tempExp.ciudad || "")
     };
-    updateField("experiences", [...(resumeData.experiences || []), newExp]);
+    
+    const sorted = sortExperiencesByDate([...(resumeData.experiences || []), newExp]);
+    updateField("experiences", sorted);
     setTempExp({ company: "", role: "", start_date: "", end_date: "", current: false, description: "", ciudad: "" });
+    showToast("success", "¡Experiencia laboral agregada correctamente en orden cronológico!");
   };
 
   const removeExperience = (id: string) => {
     updateField("experiences", (resumeData.experiences || []).filter(e => e.id !== id));
+    showToast("success", "Experiencia eliminada.");
   };
 
   const addReference = () => {
     if (!tempRef.name || !tempRef.phone) {
-      alert("El Nombre y Celular son campos requeridos.");
+      showToast("error", "Falta información: Nombre y Celular son requeridos.");
       return;
     }
     const newRef: Reference = {
-      id: Math.random().toString(),
-      name: tempRef.name || "",
-      role: tempRef.role || "",
+      id: "ref-" + Math.random().toString(36).substring(2, 9),
+      name: formatTitleCase(tempRef.name || ""),
+      role: formatTitleCase(tempRef.role || ""),
       phone: tempRef.phone || "",
-      ciudad: tempRef.ciudad || ""
+      ciudad: formatTitleCase(tempRef.ciudad || "")
     };
     updateField("references", [...(resumeData.references || []), newRef]);
     setTempRef({ name: "", role: "", phone: "", ciudad: "" });
+    showToast("success", "¡Referencia personal agregada correctamente!");
   };
 
   const removeReference = (id: string) => {
     updateField("references", (resumeData.references || []).filter(r => r.id !== id));
+    showToast("success", "Referencia eliminada.");
   };
 
   const addEducation = () => {
     if ((resumeData.education || []).length >= 5) {
-      alert("Puedes registrar un máximo de 5 logros académicos en tu hoja de vida para asegurar un diseño limpio y ordenado.");
+      showToast("error", "Puedes registrar un máximo de 5 logros académicos.");
       return;
     }
     if (!tempEdu.school || !tempEdu.degree) {
-      alert("El Nombre de la Institución y el Título Obtenido son de carácter obligatorio.");
+      showToast("error", "Falta información obligatoria: Institución Educativa y Título Obtenido.");
       return;
     }
     const newEdu: Education = {
       id: "edu-" + Math.random().toString(36).substring(2, 9),
-      school: tempEdu.school || "",
-      degree: tempEdu.degree || "",
+      school: formatTitleCase(tempEdu.school || ""),
+      degree: formatTitleCase(tempEdu.degree || ""),
       start_date: tempEdu.start_date || "",
       end_date: tempEdu.start_date || "",
       current: false,
       description: "Estudios",
-      ciudad: tempEdu.ciudad || ""
+      ciudad: formatTitleCase(tempEdu.ciudad || "")
     };
-    updateField("education", [...(resumeData.education || []), newEdu]);
+    
+    const sorted = sortEducationByDate([...(resumeData.education || []), newEdu]);
+    updateField("education", sorted);
     setTempEdu({ school: "", degree: "", start_date: "", ciudad: "" });
+    showToast("success", "¡Logro académico agregado en orden cronológico!");
   };
 
   const removeEducation = (id: string) => {
     updateField("education", (resumeData.education || []).filter(e => e.id !== id));
+    showToast("success", "Estudio académico eliminado.");
   };
 
   const addSkill = () => {
     if (!tempSkillName.trim()) {
-      alert("Por favor, escribe el nombre de la habilidad o destreza.");
+      showToast("error", "Falta escribir el nombre de la habilidad.");
       return;
     }
     if ((resumeData.skills || []).length >= 8) {
-      alert("Puedes agregar un máximo de 8 habilidades o destrezas para mantener un diseño visual equilibrado.");
+      showToast("error", "Puedes agregar un máximo de 8 habilidades o destrezas.");
       return;
     }
     const newSkill: Skill = {
       id: "sk-" + Math.random().toString(36).substring(2, 9),
-      name: tempSkillName.trim(),
+      name: formatSentenceCase(tempSkillName),
       level: tempSkillLevel
     };
     updateField("skills", [...(resumeData.skills || []), newSkill]);
     setTempSkillName("");
     setTempSkillLevel(85);
+    showToast("success", "¡Habilidad agregada correctamente!");
   };
 
   const removeSkill = (id: string) => {
     updateField("skills", (resumeData.skills || []).filter(s => s.id !== id));
+    showToast("success", "Habilidad eliminada.");
   };
 
   const PROFILE_PRESETS = [
@@ -425,6 +544,37 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
 
   return (
     <div className="bg-white rounded-2xl border border-stone-200/80 shadow-md overflow-hidden max-w-4xl mx-auto flex flex-col md:flex-row min-h-0 md:min-h-[580px]" id="conversational-form-container">
+      {/* Premium Notification Toast Overlay */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-xs max-w-md w-11/12 sm:w-full font-semibold"
+            style={{
+              backgroundColor: toast.type === "success" ? "#f0fdf4" : "#fef2f2",
+              borderColor: toast.type === "success" ? "#bbf7d0" : "#fecaca",
+              color: toast.type === "success" ? "#15803d" : "#b91c1c",
+            }}
+          >
+            {toast.type === "success" ? (
+              <span className="p-1 bg-green-200/50 rounded-full text-green-700 font-bold px-2">✓</span>
+            ) : (
+              <span className="p-1 bg-red-200/50 rounded-full text-red-700 font-bold px-2">✕</span>
+            )}
+            <span className="flex-1">{toast.message}</span>
+            <button 
+              type="button" 
+              onClick={() => setToast(null)} 
+              className="text-stone-400 hover:text-stone-600 transition font-black text-sm px-1.5"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Onboarding Sidebar */}
       <div className="w-full md:w-80 bg-stone-900 text-white p-5 md:p-8 flex flex-col justify-between shrink-0" id="form-onboarding-sidebar">
         <div>
@@ -437,7 +587,7 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
 
           <p className="text-[10px] uppercase text-brand font-semibold tracking-wider mb-2">Progreso del Trámite</p>
           <div className="flex items-baseline gap-1 mb-4">
-            <h2 className="text-3xl font-display font-bold tracking-tight text-white">{progressPercentage}%</h2>
+            <h2 className="text-3xl font-display font-bold tracking-tight text-white">{realProgressPercentage}%</h2>
             <span className="text-xs text-stone-400">completado</span>
           </div>
 
@@ -469,6 +619,48 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
               );
             })}
           </div>
+        </div>
+
+        {/* Borrar Progreso / Empezar de cero */}
+        <div className="mt-8 pt-5 border-t border-stone-800">
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("¿Deseas borrar todo tu progreso y empezar tu hoja de vida de cero?")) {
+                try {
+                  localStorage.removeItem("tramites_servicios_cv_draft");
+                } catch (e) {}
+                
+                setResumeData({
+                  nombres: "",
+                  apellidos: "",
+                  identificacion: "",
+                  lugar_expedicion: "",
+                  fecha_nacimiento: "",
+                  lugar_nacimiento: "",
+                  estado_civil: "Soltero(a)",
+                  celular: "",
+                  correo: "",
+                  direccion: "",
+                  barrio: "",
+                  ciudad: "",
+                  name: "",
+                  position: "",
+                  photo_url: "",
+                  summary: "",
+                  experiences: [],
+                  education: [],
+                  skills: [],
+                  references: []
+                });
+                setCurrentStep(0);
+                showToast("success", "El formulario ha sido borrado. Puedes iniciar de nuevo.");
+              }
+            }}
+            className="w-full bg-stone-850 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800/80 hover:border-stone-700 py-2.5 px-3 rounded-xl text-[10.5px] font-bold tracking-tight transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            🧹 Empezar de cero (Borrar Borrador)
+          </button>
         </div>
       </div>
 
