@@ -26,16 +26,72 @@ export default function ResumeRenderer({ resume, onBackToDashboard, onEdit }: Re
   ];
 
   const [activeThemeIdx, setActiveThemeIdx] = useState(0);
-  const [activeTemplate, setActiveTemplate] = useState<"column" | "centered">("column");
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   
   const activeColor = THEME_ACCENTS[activeThemeIdx];
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handleDownloadPDF = async () => {
+    const element = document.getElementById("cv-printable-sheet");
+    if (!element) return;
 
-  const handleDownloadDocx = () => {
-    exportToWord(resume);
+    try {
+      setIsExportingPDF(true);
+
+      const html2canvas = (await import("html2canvas")).default;
+      const { jsPDF } = await import("jspdf");
+
+      // Render element to high precision canvas
+      const canvas = await html2canvas(element, {
+        scale: 2.2, // extra Crisp A4 scaling
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+        windowWidth: 1024 // lock width during capture to guarantee desktop aspect ratio layout
+      });
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+
+      // Create PDF matching A4 aspect size 210mm x 297mm
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvasHeight * pdfWidth) / canvasWidth;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Draw first page
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
+      heightLeft -= pdfHeight;
+
+      // Handle multi-page split
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
+        heightLeft -= pdfHeight;
+      }
+
+      // Download clean PDF directly matching his name requirements
+      const cleanedName = resume.name ? resume.name.replace(/[^a-zA-Z0-9\s]/g, "") : "Profesional";
+      pdf.save(`Hoja de vida - ${cleanedName}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF, calling printing fallback", error);
+      // Fallback
+      window.print();
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   return (
@@ -47,7 +103,7 @@ export default function ResumeRenderer({ resume, onBackToDashboard, onEdit }: Re
             <button
               onClick={onBackToDashboard}
               id="toolbar-back-btn"
-              className="p-2 hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              className="p-2 px-3 hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
             >
               <ArrowLeft size={13} /> Panel de Control
             </button>
@@ -57,30 +113,14 @@ export default function ResumeRenderer({ resume, onBackToDashboard, onEdit }: Re
             <button
               onClick={onEdit}
               id="toolbar-edit-btn"
-              className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+              className="p-2 px-3 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer"
             >
               Modificar Información 📝
             </button>
           )}
 
-          {/* Template design selector */}
-          <div className="flex border border-stone-200 rounded-lg overflow-hidden text-xs bg-stone-100 shrink-0">
-            <button
-              onClick={() => setActiveTemplate("column")}
-              className={`px-3 py-2 font-bold cursor-pointer transition ${
-                activeTemplate === "column" ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-205 bg-white"
-              }`}
-            >
-              Diseño Columnas Clásico
-            </button>
-            <button
-              onClick={() => setActiveTemplate("centered")}
-              className={`px-3 py-2 font-bold cursor-pointer transition ${
-                activeTemplate === "centered" ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-205 bg-white"
-              }`}
-            >
-              Diseño Ejecutivo Tradicional
-            </button>
+          <div className="text-xs bg-stone-50 text-stone-605 px-3 py-2 rounded-lg border border-stone-150 font-semibold flex items-center gap-1.5">
+            <Sparkles size={11} className="text-amber-500 animate-pulse" /> Formato Premium Clásico Activo
           </div>
         </div>
 
@@ -106,19 +146,25 @@ export default function ResumeRenderer({ resume, onBackToDashboard, onEdit }: Re
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleDownloadDocx}
-              id="btn-export-word"
-              className="p-2 py-1.5 bg-amber-50 shadow-xs border border-amber-200 hover:bg-amber-100 text-amber-900 font-bold rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <Download size={13} /> Exportar Word (.doc)
-            </button>
-
-            <button
-              onClick={handlePrint}
+              type="button"
+              disabled={isExportingPDF}
+              onClick={handleDownloadPDF}
               id="btn-export-pdf"
-              className="p-2 py-1.5 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              className={`p-2.5 py-2 bg-stone-900 hover:bg-stone-850 text-white font-bold rounded-lg text-xs flex items-center gap-2 transition cursor-pointer shadow-sm ${
+                isExportingPDF ? "opacity-75 cursor-not-allowed" : ""
+              }`}
             >
-              <Printer size={13} className="text-amber-400" /> Imprimir / Guardar PDF (A4)
+              {isExportingPDF ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-stone-400 border-t-white rounded-full animate-spin"></div>
+                  <span>Generando PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={13} className="text-amber-400 animate-bounce" />
+                  <span>Descargar PDF Directo 📥</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -129,15 +175,14 @@ export default function ResumeRenderer({ resume, onBackToDashboard, onEdit }: Re
         className="bg-white print-card-shadow shadow-xl rounded-2xl overflow-hidden border border-stone-200" 
         id="cv-printable-sheet"
       >
-        {activeTemplate === "column" ? (
-          /* TEMPLATE 1: SLIT COLUMN LAYOUT (W3 CSS-inspired classic) */
-          <div className="flex flex-col md:flex-row print-row min-h-0 md:min-h-[1100px]" id="column-template-frame">
-            
-            {/* Left Column Section */}
-            <div className="w-full md:w-[35%] bg-stone-50/70 border-r border-stone-200/60 p-5 md:p-8 flex flex-col gap-6 md:gap-8 print-col-3" id="cv-sidebar-left">
-              {/* Profile Image card inside sidebar */}
-              <div className="flex flex-col items-center text-center gap-4">
-                <div className="relative">
+        {/* TEMPLATE 1: SLIT COLUMN LAYOUT (W3 CSS-inspired classic) */}
+        <div className="flex flex-col md:flex-row print-row min-h-0 md:min-h-[1100px]" id="column-template-frame">
+          
+          {/* Left Column Section */}
+          <div className="w-full md:w-[35%] bg-stone-50/70 border-r border-[#e7e5e4] p-5 md:p-8 flex flex-col gap-6 md:gap-8 print-col-3" id="cv-sidebar-left">
+            {/* Profile Image card inside sidebar */}
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="relative">
                   <img 
                     src={resume.photo_url || getInitialsAvatar(resume.name)} 
                     alt={resume.name} 
@@ -398,185 +443,7 @@ export default function ResumeRenderer({ resume, onBackToDashboard, onEdit }: Re
               </div>
             </div>
           </div>
-        ) : (
-          /* TEMPLATE 2: DISEÑO FORMAL EJECUTIVO (Elegant, traditional horizontal HR-style layout) */
-          <div className="p-6 md:p-10 space-y-7" id="formal-executive-template-frame">
-            {/* Header: Horizontal elegant layout */}
-            <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-6 pb-6 border-b border-stone-200">
-              <div className="flex-1 space-y-3.5 text-center md:text-left">
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-mono font-black tracking-widest text-stone-405 block">Currículum Vitae</span>
-                  <h1 className="text-3xl font-display font-black text-stone-900 tracking-tight leading-none uppercase">
-                    {resume.name}
-                  </h1>
-                  <p className={`text-xs font-mono font-bold uppercase tracking-wider ${activeColor.text}`}>
-                    {resume.position || "Profesional"}
-                  </p>
-                </div>
-
-                {/* Grid details in horizontal line */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs text-stone-605 max-w-2xl font-semibold">
-                  {resume.identificacion && (
-                    <div className="flex items-center gap-1.5 justify-center md:justify-start">
-                      <span className="text-stone-400 font-mono text-[10px] font-black uppercase">CC:</span>
-                      <span className="text-stone-800">{resume.identificacion} {resume.lugar_expedicion && `(${resume.lugar_expedicion})`}</span>
-                    </div>
-                  )}
-                  {resume.celular && (
-                    <div className="flex items-center gap-1.5 justify-center md:justify-start">
-                      <Phone size={12} className="text-stone-450 shrink-0" />
-                      <span className="text-stone-855">{resume.celular}</span>
-                    </div>
-                  )}
-                  {resume.correo && (
-                    <div className="flex items-center gap-1.5 justify-center md:justify-start">
-                      <Mail size={12} className="text-stone-450 shrink-0" />
-                      <span className="text-stone-855 truncate select-all">{resume.correo}</span>
-                    </div>
-                  )}
-                  {resume.ciudad && (
-                    <div className="flex items-center gap-1.5 justify-center md:justify-start">
-                      <MapPin size={12} className="text-stone-450 shrink-0" />
-                      <span className="text-stone-855">{resume.ciudad} {resume.direccion && `- ${resume.direccion}`}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Photo on right side */}
-              <div className="shrink-0 relative">
-                <img 
-                  src={resume.photo_url || getInitialsAvatar(resume.name)} 
-                  alt={resume.name} 
-                  referrerPolicy="no-referrer"
-                  className="w-28 h-28 rounded-xl object-cover border-4 border-stone-105 shadow-sm" 
-                />
-              </div>
-            </div>
-
-            {/* Profile narrative */}
-            <div className="space-y-2 print-avoid-break">
-              <h3 className={`text-[11px] font-mono uppercase font-black tracking-widest border-l-3 pl-2.5 ${activeColor.border} text-stone-850`}>
-                Perfil Profesional
-              </h3>
-              <p className="text-xs text-stone-701 text-justify leading-relaxed whitespace-pre-line bg-stone-50/50 p-4 border border-stone-100 rounded-xl">
-                {resume.summary || "Profesional proactivo con alta responsabilidad y puntualidad para cumplir asignaciones laborales de cualquier nivel."}
-              </p>
-            </div>
-
-            {/* Timelines row: sequential categories and balanced visual timeline items */}
-            <div className="space-y-7">
-              {/* Experiencia Laboral */}
-              <div className="space-y-3.5">
-                <h3 className={`text-[11px] font-mono uppercase font-black tracking-widest border-l-3 pl-2.5 ${activeColor.border} text-stone-850`}>
-                  Experiencia Laboral
-                </h3>
-                {resume.experiences && resume.experiences.length > 0 ? (
-                  <div className="space-y-4">
-                    {resume.experiences.map((exp) => (
-                      <div key={exp.id || exp.company} className="border-b border-stone-100 pb-3.5 last:border-0 print-avoid-break">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-bold text-stone-900">
-                          <span>{exp.role} <span className="text-stone-400 font-normal">|</span> <span className="text-stone-600 font-semibold">{exp.company}</span></span>
-                          <span className={`text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full ${activeColor.bg} ${activeColor.badgeText} shrink-0 self-start sm:self-center`}>
-                            {exp.start_date} - {exp.current ? "Actual" : exp.end_date}
-                          </span>
-                        </div>
-                        {exp.ciudad && (
-                          <span className="text-[9px] text-stone-400 font-mono flex items-center gap-0.5 mt-0.5">
-                            <MapPin size={9} /> {exp.ciudad}
-                          </span>
-                        )}
-                        {exp.description && (
-                          <p className="text-[11px] text-stone-605 mt-1.5 leading-relaxed text-justify whitespace-pre-line">{exp.description}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-stone-400 italic">No registra experiencias previas.</p>
-                )}
-              </div>
-
-              {/* Estudios Realizados */}
-              <div className="space-y-3.5">
-                <h3 className={`text-[11px] font-mono uppercase font-black tracking-widest border-l-3 pl-2.5 ${activeColor.border} text-stone-850`}>
-                  Estudios Realizados
-                </h3>
-                {resume.education && resume.education.length > 0 ? (
-                  <div className="space-y-3">
-                    {resume.education.map((edu) => (
-                      <div key={edu.id || edu.school} className="border-b border-stone-100 pb-3 last:border-0 print-avoid-break">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-bold text-stone-900">
-                          <span>{edu.degree}</span>
-                          <span className={`text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full ${activeColor.bg} ${activeColor.badgeText} shrink-0 self-start sm:self-center`}>
-                            {edu.start_date}
-                          </span>
-                        </div>
-                        <p className="text-xs text-stone-500 font-semibold">{edu.school}</p>
-                        {edu.ciudad && (
-                          <span className="text-[9px] text-stone-400 font-mono flex items-center gap-0.5 mt-0.5">
-                            <MapPin size={9} /> {edu.ciudad}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-stone-400 italic">No registra estudios adicionales.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Bottom elements: Skills and references side-by-side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-5 border-t border-stone-100">
-              {/* Skills rating */}
-              {resume.skills && resume.skills.length > 0 && (
-                <div className="space-y-3.5 print-avoid-break">
-                  <h3 className={`text-[11px] font-mono uppercase font-black tracking-widest border-l-3 pl-2.5 ${activeColor.border} text-stone-850`}>
-                    Habilidades y Destrezas
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3.5">
-                    {resume.skills.map((skill) => (
-                      <div key={skill.id} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs font-semibold text-stone-700">
-                          <span className="truncate">{skill.name}</span>
-                          <span className="text-[9px] text-stone-400 font-mono font-normal">{skill.level}%</span>
-                        </div>
-                        <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-300 ${activeColor.bg}`}
-                            style={{ width: `${skill.level}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* References Row */}
-              {resume.references && resume.references.length > 0 && (
-                <div className="space-y-3.5 print-avoid-break">
-                  <h3 className={`text-[11px] font-mono uppercase font-black tracking-widest border-l-3 pl-2.5 ${activeColor.border} text-stone-850`}>
-                    Referencias Personales
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {resume.references.map((ref) => (
-                      <div key={ref.id} className="bg-stone-50/50 p-3 rounded-lg border border-stone-200 text-xs">
-                        <p className="font-bold text-stone-900">{ref.name}</p>
-                        {ref.role && <p className="text-[9px] text-stone-400 font-semibold uppercase">{ref.role}</p>}
-                        <span className="text-[10px] font-mono text-stone-800 font-bold block mt-1 flex items-center gap-1 bg-white p-1 rounded border border-stone-150">
-                          <Phone size={10} className="text-stone-400" /> {ref.phone}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }

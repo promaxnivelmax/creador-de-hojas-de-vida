@@ -316,12 +316,27 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
   };
 
   const handleNext = () => {
+    // Standardize capitalization of all current/entered fields on Next click
+    const updated = { ...resumeData };
+    
+    if (updated.nombres) updated.nombres = formatTitleCase(updated.nombres);
+    if (updated.apellidos) updated.apellidos = formatTitleCase(updated.apellidos);
+    if (updated.lugar_nacimiento) updated.lugar_nacimiento = formatTitleCase(updated.lugar_nacimiento);
+    if (updated.lugar_expedicion) updated.lugar_expedicion = formatTitleCase(updated.lugar_expedicion);
+    if (updated.direccion) updated.direccion = formatTitleCase(updated.direccion);
+    if (updated.barrio) updated.barrio = formatTitleCase(updated.barrio);
+    if (updated.ciudad) updated.ciudad = formatTitleCase(updated.ciudad);
+    if (updated.position) updated.position = formatTitleCase(updated.position);
+    if (updated.summary) updated.summary = formatSentenceCase(updated.summary);
+    
+    setResumeData(updated);
+
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
       // Final submit validation
-      const realNombres = resumeData.nombres?.trim() || "";
-      const realApellidos = resumeData.apellidos?.trim() || "";
+      const realNombres = updated.nombres?.trim() || "";
+      const realApellidos = updated.apellidos?.trim() || "";
       if (!realNombres) {
         showToast("error", "Por favor especifica los nombres del solicitante en el Paso 1.");
         setCurrentStep(0);
@@ -329,7 +344,7 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
       }
 
       // Safeguard: auto-commit text from active inputs if they forgot to click "Agregar"
-      const finalEducation = [...(resumeData.education || [])];
+      const finalEducation = [...(updated.education || [])];
       if (tempEdu.school && tempEdu.degree) {
         const alreadyExists = finalEducation.some(
           edu => edu.school?.toLowerCase() === tempEdu.school?.toLowerCase() && edu.degree?.toLowerCase() === tempEdu.degree?.toLowerCase()
@@ -358,18 +373,18 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
       }
 
       onSave({
-        ...resumeData,
-        id: resumeData.id || "res-" + Math.random().toString(36).substring(2, 9),
-        slug: resumeData.slug || generatedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "perfil",
+        ...updated,
+        id: updated.id || "res-" + Math.random().toString(36).substring(2, 9),
+        slug: updated.slug || generatedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "perfil",
         name: generatedName,
-        position: formatTitleCase(resumeData.position || "Profesora / Profesional"),
-        city: formatTitleCase(resumeData.ciudad || ""),
-        email: resumeData.correo || "",
-        phone: resumeData.celular || "",
-        created_at: resumeData.created_at || new Date().toISOString(),
+        position: formatTitleCase(updated.position || "Profesora / Profesional"),
+        city: formatTitleCase(updated.ciudad || ""),
+        email: updated.correo || "",
+        phone: updated.celular || "",
+        created_at: updated.created_at || new Date().toISOString(),
         education: sortEducationByDate(finalEducation),
-        experiences: sortExperiencesByDate(resumeData.experiences || []),
-        references: resumeData.references || []
+        experiences: sortExperiencesByDate(updated.experiences || []),
+        references: updated.references || []
       } as Resume);
     }
   };
@@ -506,20 +521,20 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
 
   const PROFILE_PRESETS = [
     {
-      title: "Administrativo & Recepción",
-      text: "Auxiliar administrativo con sólida orientación al detalle y vocación de servicio al cliente. Experiencia desempeñando labores de atención telefónica o presencial, radicación de documentos, control de archivo físico y digital y manejo de herramientas de Microsoft Office. Me caracterizo por mi puntualidad, amabilidad, proactividad y disposición para trabajar en entornos dinámicos organizados."
+      title: "Administración, Organización y Apoyo (Perfil General)",
+      text: "Persona organizada, proactiva y con alta vocación de servicio. Sólida experiencia desempeñando tareas clave de soporte, control documental, recepción, control de inventarios físicos y excelente asistencia general. Me caracterizo por mi puntualidad intachable, amabilidad absoluta, meticulosidad y rápida capacidad de adaptación para apoyar las operaciones y equipos de trabajo."
     },
     {
-      title: "Servicios Generales / Aseo",
-      text: "Auxiliar de servicios generales y aseo con gran sentido de la responsabilidad, honestidad y meticulosidad. Experiencia comprobada en limpieza periódica y desinfección de oficinas, bodegas o áreas residenciales, garantizando un ambiente saludable e impecable. Persona puntual con alta disposición y adaptación rápida al cumplimiento riguroso de tareas asignadas."
+      title: "Operativo, Servicios y Trabajo Práctico (Perfil General)",
+      text: "Colaborador de confianza, responsable, honesto y con gran actitud hacia el trabajo práctico y operativo. Amplia experiencia garantizando la correcta ejecución de asignaciones físicas, logística básica, orden y cumplimiento estricto de tareas prioritarias. Me distingo por mi puntualidad, gran disposición y excelente rendimiento bajo condiciones dinámicas."
     },
     {
-      title: "Operario / Logística / Bodega",
-      text: "Operario técnico con amplia experiencia en procesos logísticos de almacenamiento, cargue y descargue, despacho de mercancías y control de inventarios. Capacidad física óptima, riguroso seguimiento de normas de seguridad industrial, trabajo coordinado bajo presión y puntualidad intachable en el cumplimiento de turnos."
+      title: "Servicios al Cliente, Recepción y Comunicación (Perfil General)",
+      text: "Profesional proactivo con facilidad de expresión y una excelente actitud de atención al público. Experiencia interactuando de forma cordial con clientes internos y externos, resolviendo requerimientos básicos con rapidez, agendamiento de citas u organización logística de eventos. Persona puntual, amigable, orientada al logro y de aprendizaje ágil."
     },
     {
-      title: "Asesor Técnico / Mantenimiento",
-      text: "Técnico preparado con amplias destrezas analíticas para el mantenimiento preventivo y correctivo. Experiencia de campo diagnosticando fallas de manera ágil y honesta. Caracterizado por una alta ética, cumplimiento escrupuloso de los tiempos de entrega pactados y excelente disposición al aprendizaje continuo."
+      title: "Ejecutivo Versátil con Enfoque en Calidad (Perfil General)",
+      text: "Profesional polivalente caracterizado por un alto nivel de iniciativa, responsabilidad y ética laboral. Capacidad demostrada para asumir diferentes funciones de soporte, agilizar flujos operativos diarios y aprender ágilmente nuevas herramientas o directrices. Concentrado en el trabajo seguro, la puntualidad y el aporte de valor en cualquier equipo."
     }
   ];
 

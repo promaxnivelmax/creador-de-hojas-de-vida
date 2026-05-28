@@ -2,6 +2,30 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { Resume } from "./src/types";
+import { GoogleGenAI } from "@google/genai";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+let aiClient: any = null;
+function getGeminiClient() {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("GEMINI_API_KEY non-existent in environment; AI features will return simulated professional layouts.");
+      return null;
+    }
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': "aistudio-build",
+        }
+      }
+    });
+  }
+  return aiClient;
+}
 
 // Helper for generating initial sample data in Spanish / Colombian Hoja de Vida style
 const createSampleResumes = (): Resume[] => [
@@ -112,6 +136,194 @@ async function startServer() {
     }
     res.json(resume);
   });
+
+  // AIDocument generator endpoints with full variables mapping and layout support
+  app.post("/api/ai/generate-document", async (req, res) => {
+    const { documentType, variables = {}, style = "Formal", action = "generate", currentText = "" } = req.body;
+
+    const formattedVars = Object.entries(variables)
+      .map(([key, val]) => `- ${key}: ${val}`)
+      .join("\n");
+
+    const systemInstruction = `Eres un experto asistente de redacción formal de correspondencia, trámites oficiales, solicitudes administrativas y documentos jurídicos para Colombia y América Latina. Tus textos son impecables, con una sintaxis correcta, tono respetuoso, sobrio y perfectamente estructurado para hojas de oficina premium.`;
+
+    let prompt = "";
+    if (action === "improve") {
+      prompt = `Mejora la redacción, corrige la ortografía, perfecciona la gramática y optimiza todo el vocabulario del siguiente texto formal en español, elevándolo a un estilo y tono de nivel ${style}. Mantén intactas las variables u datos clave como nombres de personas, fechas, números de documentos (cédulas) y nombres de empresas.
+Texto actual a mejorar:
+"${currentText}"
+
+Devuelve ÚNICAMENTE el texto final corregido y limpio del documento de forma directa. No añadas introducciones, explicaciones, ni marcas externas.`;
+    } else {
+      prompt = `Redacta desde el absoluto comienzo un documento formal del tipo "${documentType}" siguiendo un estilo de tono característico de la plantilla "${style}".
+Integra y procesa de forma natural las siguientes variables suministradas por el usuario:
+${formattedVars}
+
+Si faltan variables de vital importancia para el contexto del documento, deja un placeholder explícito entre corchetes rectos como [Especificar Dato].
+El escrito estructurado debe indispensablemente incluir:
+1. Encabezado de ciudad y fecha actualizados en la parte superior.
+2. Destinatario corporativo/personal formal (E.S.D. u Oficial de despacho).
+3. Línea del "Asunto: ..." muy claro e intuitivo.
+4. Saludo preliminar con respeto.
+5. El desarrollo redactado de los párrafos conforme al requerimiento regulatario.
+6. Cierre corporativo de agradecimiento con espacio adecuado para firma, nombre y número identificador.
+
+Devuelve ÚNICAMENTE el texto redactado del documento final de forma directa. No agregues "Aquí tienes tu carta" u otro texto conversacional.`;
+    }
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const response = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: prompt,
+          config: {
+            systemInstruction,
+            temperature: 0.65,
+          }
+        });
+
+        if (response && response.text) {
+          return res.json({ success: true, text: response.text.trim() });
+        }
+      } catch (err: any) {
+        console.error("Gemini server generation failed, using local model templates:", err);
+      }
+    }
+
+    // High fidelity template fallback for outstanding experience offline
+    const fallbackText = getTemplateFallback(documentType, variables, style);
+    res.json({ success: true, text: fallbackText, note: "Generación ejecutada mediante plantilla local estructurada en español" });
+  });
+
+  function getTemplateFallback(documentType: string, variables: any, style: string): string {
+    const nombre = variables.nombre || "[Nombre del Solicitante]";
+    const cedula = variables.cedula || "[Cédula de Ciudadanía - CC]";
+    const fecha = variables.fecha || "[Fecha de Hoy]";
+    const ciudad = variables.ciudad || "[Ciudad]";
+    const empresa = variables.empresa || "[Nombre de la Empresa]";
+    const asunto = variables.asunto || `Trámite de ${documentType}`;
+    const destinatario = variables.destinatario || "[Nombre del Destinatario / Cargo]";
+    const cargo = variables.cargo || "[Cargo del Solicitante]";
+    const fechaInicio = variables.fechaInicio || "[Fecha de Inicio]";
+    const fechaFin = variables.fechaFin || "[Fecha de Finalización]";
+    const motivo = variables.motivo || "[Motivo o Justificación Detallada]";
+
+    const fechaEncabezado = fecha;
+    const ciudadEncabezado = ciudad;
+
+    if (documentType.toLowerCase().includes("renuncia")) {
+      return `${ciudadEncabezado}, ${fechaEncabezado}
+
+Señores:
+${empresa}
+Atn: Departamento de Gestión Humana / ${destinatario}
+E. S. D.
+
+Asunto: Carta de Renuncia Voluntaria e Irrevocable
+
+Respetados Señores,
+
+Por medio de la presente, me dirijo a ustedes de manera respetuosa con el propósito de manifestar mi decisión libre, voluntaria e irrevocable de presentar mi renuncia formal al cargo de ${cargo} en esta importante organización.
+
+Esta decisión responde estrictamente a motivos de crecimiento intelectual y superación profesional. Quiero agradecer de manera profunda la confianza recibida, así como las inestimables oportunidades laborales y experiencias personales de cordial compañerismo compartidas durante mi vinculación.
+
+Estaré cumpliendo mis labores correspondientes hasta el día acordado, quedando a total disposición para el respectivo proceso de paz y salvo y liquidación de prestaciones según las directrices vigentes de la ley.
+
+Agradezco la atención concedida a esta comunicación y les deseo el mayor de los éxitos en sus operaciones corporativas.
+
+Cordialmente,
+
+
+_______________________________
+${nombre}
+C.C. No. ${cedula}
+Teléfono: ${variables.celular || "[Contacto]"}`;
+    }
+
+    if (documentType.toLowerCase().includes("vacaciones")) {
+      return `${ciudadEncabezado}, ${fechaEncabezado}
+
+Señores:
+${empresa}
+Atn: Oficina de Talento Humano / Gestión de Personal
+E. S. D.
+
+Asunto: Solicitud Legal de Periodo de Vacaciones
+
+Respetados Señores:
+
+De manera atenta me dirijo a ustedes para solicitarles formalmente la autorización e inicio de mi periodo de descanso legal de vacaciones anuales remuneradas, al cual tengo pleno derecho por mi tiempo de servicio activo.
+
+De acuerdo con lo planificado para el correcto flujo del área, aspiro iniciar el disfrute de mis vacaciones desde la fecha ${fechaInicio} y reincorporarme a mis labores habituales el día de regreso ${fechaFin}, cumpliendo así con las jornadas establecidas.
+
+Dejo debidamente coordinados los pendientes más importantes del puesto para evitar contratiempos. Agradezco su valiosa y oportuna aprobación a este requerimiento de descanso familiar.
+
+Atentamente,
+
+
+_______________________________
+${nombre}
+Cargo: ${cargo}
+C.C. No. ${cedula}
+Teléfono: ${variables.celular || "[Contacto]"}`;
+    }
+
+    if (documentType.toLowerCase().includes("permiso") || documentType.toLowerCase().includes("excusa")) {
+      return `${ciudadEncabezado}, ${fechaEncabezado}
+
+Señores:
+${empresa || "[Nombre de la Institución]"}
+Atn: ${destinatario || "Dirección Administrativa"}
+E. S. D.
+
+Asunto: Solicitud Formal de Permiso o Justificación de Ausencia
+
+Respetado(a) Señor(a):
+
+Me dirijo a usted con el fin de solicitar formalmente un permiso especial de ausencia para faltar temporalmente a mis obligaciones diarias ordinarias de mi cargo (${cargo}), durante el lapso de tiempo comprendido desde el día ${fechaInicio} hasta el día ${fechaFin}.
+
+La justificación de este requerimiento extraordinario obedece a la siguiente situación: ${motivo}. Adjunto los soportes médicos o de trámites correspondientes para su completa verificación.
+
+Sé de antemano el compromiso que asumo para reponer las actividades necesarias de mi área y agradezco inmensamente su comprensión frente a esta eventualidad de fuerza mayor.
+
+Atentamente,
+
+
+_______________________________
+${nombre}
+C.C. No. ${cedula}
+Teléfono: ${variables.celular || "[Contacto]"}`;
+    }
+
+    // Default general-purpose executive letter format
+    return `${ciudadEncabezado}, ${fechaEncabezado}
+
+Señores:
+${destinatario}
+${empresa || "[Entidad de Destino]"}
+${ciudad}
+
+Asunto: ${asunto}
+
+Respetado(a) Señor(a):
+
+Por medio de este oficio escrito, me permito saludarle de la manera más atenta y expresar formalmente este requerimiento con relación al trámite de ${documentType}.
+
+El objeto de la presente comunicación es presentar formalmente la siguiente situación relevante: ${motivo || "Se solicita comedidamente el inicio y desarrollo del trámite mencionado para los fines de ley de acuerdo con nuestras facultades legítimas."} 
+
+Agradezco encarecidamente el tiempo tomado para el análisis cuidadoso de este requerimiento administrativo y quedo en absoluta disposición de recibir cualquier comentario, corrección u orientación complementaria a los datos de contacto brindados.
+
+Cordialmente,
+
+
+_______________________________
+${nombre}
+C.C. No. ${cedula}
+Cargo/Calidad: ${cargo || "Remitente Solicitante"}
+${variables.celular ? "Tel: " + variables.celular : ""}
+${variables.correo ? "Email: " + variables.correo : ""}`;
+  }
 
   app.post("/api/resumes", (req, res) => {
     const data = req.body as Partial<Resume>;

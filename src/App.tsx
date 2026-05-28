@@ -5,6 +5,7 @@ import ConversationalForm from "./components/ConversationalForm";
 import ResumeRenderer from "./components/ResumeRenderer";
 import LandingPage from "./components/LandingPage";
 import LoginPage from "./components/LoginPage";
+import PapeleriaSeccion from "./components/PapeleriaSeccion";
 import { supabase, getResumes, saveResumeToSupabase, deleteResumeFromSupabase } from "./lib/supabase";
 import { 
   FolderPlus, Layers, Database, Sparkles, 
@@ -110,6 +111,7 @@ export default function App() {
   const [publicPortfolioSlug, setPublicPortfolioSlug] = useState<string | null>(null);
   const [selectedPreviewId, setSelectedPreviewId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [dashboardTab, setDashboardTab] = useState<"hojas-de-vida" | "papeleria">("hojas-de-vida");
   const [isOffline, setIsOffline] = useState(false);
 
   // Sync Supabase Auth active session on startup
@@ -447,7 +449,7 @@ export default function App() {
               <button
                 onClick={handleReturnToDashboard}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition ${
-                  currentView === "dashboard"
+                  currentView === "dashboard" && dashboardTab === "hojas-de-vida"
                     ? "bg-stone-800 text-brand border-l-4 border-brand rounded-l-none pl-2.5"
                     : "text-stone-400 hover:bg-stone-800/60 hover:text-white"
                 }`}
@@ -466,6 +468,18 @@ export default function App() {
               >
                 <PlusCircle size={15} />
                 <span>Crear Hoja de Vida</span>
+              </button>
+
+              <button
+                onClick={() => { setCurrentView("dashboard"); setDashboardTab("papeleria"); setIsSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition ${
+                  currentView === "dashboard" && dashboardTab === "papeleria"
+                    ? "bg-stone-800 text-brand border-l-4 border-brand rounded-l-none pl-2.5"
+                    : "text-stone-400 hover:bg-stone-800/60 hover:text-white"
+                }`}
+              >
+                <FileText size={15} />
+                <span>Papelería y Documentos</span>
               </button>
             </nav>
 
@@ -599,33 +613,71 @@ export default function App() {
             <div className="h-full">
               {currentView === "dashboard" && (
                 <div className="space-y-6">
-                  {/* Hero Dashboard Introductory Banner */}
-                  <div className="bg-gradient-to-r from-stone-900 via-stone-850 to-stone-950 text-white rounded-2xl p-7 relative overflow-hidden shadow-sm mb-2 border border-amber-400/10" id="hero-banner">
-                    <div className="relative z-10 max-w-2xl space-y-2">
-                      <span className="text-[10px] uppercase font-mono tracking-widest text-[#ffc132] font-bold bg-[#ffc132]/10 px-2.5 py-1 rounded-full border border-[#ffc132]/20 inline-block">
-                        Formatos Profesionales
+                  {/* Modern Tab Switcher between Hojas de Vida and Papelería */}
+                  <div className="no-print flex border-b border-stone-200 pb-px gap-6 mb-4 select-none">
+                    <button
+                      onClick={() => setDashboardTab("hojas-de-vida")}
+                      className={`pb-3 text-xs md:text-sm font-semibold tracking-tight transition-all duration-150 border-b-2 px-1 cursor-pointer flex items-center gap-2 ${
+                        dashboardTab === "hojas-de-vida"
+                          ? "border-amber-500 text-stone-950 font-bold"
+                          : "border-transparent text-stone-500 hover:text-stone-900"
+                      }`}
+                    >
+                      <span>📂 Mis Hojas de Vida</span>
+                      <span className="text-[10px] bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded font-mono font-bold">
+                        {resumes.length}
                       </span>
-                      <h2 className="text-2xl font-display font-bold tracking-tight leading-tight">
-                        Generador de Hojas de Vida Sencillas
-                      </h2>
-                      <p className="text-xs text-stone-300 leading-relaxed">
-                        Crea y administra tus currículums de forma estructurada con Onboarding conversacional de alta velocidad. Genera enlaces dinámicos para compartir, y descarga tu hoja de vida con diseño tradicional listo para imprimir.
-                      </p>
-                    </div>
-                    {/* Decorative radial lighting representing heat warmth */}
-                    <div className="absolute right-0 top-0 w-80 h-full bg-gradient-to-l from-brand/10 to-transparent pointer-events-none" />
+                    </button>
+                    <button
+                      onClick={() => setDashboardTab("papeleria")}
+                      className={`pb-3 text-xs md:text-sm font-semibold tracking-tight transition-all duration-150 border-b-2 px-1 cursor-pointer flex items-center gap-2 ${
+                        dashboardTab === "papeleria"
+                          ? "border-amber-500 text-stone-950 font-bold"
+                          : "border-transparent text-stone-500 hover:text-stone-900"
+                      }`}
+                    >
+                      <span>✍️ Papelería y Documentos</span>
+                      <span className="text-[10px] bg-amber-100 border border-amber-300 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase font-mono tracking-wider">
+                        Nuevo
+                      </span>
+                    </button>
                   </div>
 
-                  {/* Dashboard with preview side widget integration */}
-                  <Dashboard
-                    resumes={resumes}
-                    selectedPreviewId={selectedPreviewId}
-                    onSelectPreviewId={setSelectedPreviewId}
-                    onAddNewResume={handleCreateNewResumeTrigger}
-                    onEditResume={handleEditResumeTrigger}
-                    onViewResume={handleViewResumeTrigger}
-                    onDeleteResume={handleDeleteResume}
-                  />
+                  {dashboardTab === "hojas-de-vida" ? (
+                    <div className="space-y-6 animate-fade-in" id="resumes-view-tab-area">
+                      {/* Hero Dashboard Introductory Banner */}
+                      <div className="bg-gradient-to-r from-stone-900 via-stone-850 to-stone-950 text-white rounded-2xl p-7 relative overflow-hidden shadow-sm mb-2 border border-amber-400/10" id="hero-banner">
+                        <div className="relative z-10 max-w-2xl space-y-2">
+                          <span className="text-[10px] uppercase font-mono tracking-widest text-[#ffc132] font-bold bg-[#ffc132]/10 px-2.5 py-1 rounded-full border border-[#ffc132]/20 inline-block">
+                            Formatos Profesionales
+                          </span>
+                          <h2 className="text-2xl font-display font-bold tracking-tight leading-tight">
+                            Generador de Hojas de Vida Sencillas
+                          </h2>
+                          <p className="text-xs text-stone-300 leading-relaxed">
+                            Crea y administra tus currículums de forma estructurada con Onboarding conversacional de alta velocidad. Genera enlaces dinámicos para compartir, y descarga tu hoja de vida con diseño tradicional listo para imprimir.
+                          </p>
+                        </div>
+                        {/* Decorative radial lighting representing heat warmth */}
+                        <div className="absolute right-0 top-0 w-80 h-full bg-gradient-to-l from-brand/10 to-transparent pointer-events-none" />
+                      </div>
+
+                      {/* Dashboard with preview side widget integration */}
+                      <Dashboard
+                        resumes={resumes}
+                        selectedPreviewId={selectedPreviewId}
+                        onSelectPreviewId={setSelectedPreviewId}
+                        onAddNewResume={handleCreateNewResumeTrigger}
+                        onEditResume={handleEditResumeTrigger}
+                        onViewResume={handleViewResumeTrigger}
+                        onDeleteResume={handleDeleteResume}
+                      />
+                    </div>
+                  ) : (
+                    <div className="animate-fade-in" id="documents-view-tab-area">
+                      <PapeleriaSeccion />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -653,8 +705,8 @@ export default function App() {
                 <div className="max-w-6xl mx-auto">
                   <ResumeRenderer
                     resume={selectedResume}
-                    onBackToDashboard={handleReturnToDashboard}
-                    onEdit={() => handleEditResumeTrigger(selectedResume)}
+                    onBackToDashboard={publicPortfolioSlug ? undefined : handleReturnToDashboard}
+                    onEdit={publicPortfolioSlug ? undefined : () => handleEditResumeTrigger(selectedResume)}
                   />
                 </div>
               )}
