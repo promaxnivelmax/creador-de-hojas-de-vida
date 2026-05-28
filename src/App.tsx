@@ -290,7 +290,7 @@ export default function App() {
   // Create or Update resume
   const handleSaveResume = async (resume: Resume) => {
     if (!user) {
-      alert("Debes iniciar sesión con tu cuenta de Supabase de Barrancabermeja para guardar cambios.");
+      alert("Debes iniciar sesión con tu cuenta de Supabase para guardar cambios.");
       return;
     }
 

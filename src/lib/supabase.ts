@@ -15,10 +15,29 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+// Define a standard UUID validation regex
+const UUID_REGEXP = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isValidUUID(id: string | null | undefined): boolean {
+  if (!id) return false;
+  return UUID_REGEXP.test(id);
+}
+
+export function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // Helper to map and sanitize payload data for PostgreSQL tables (matching the SQL Schema)
-function sanitizeResume(res: Partial<Resume>, userId: string) {
+function sanitizeResume(res: Partial<Resume>, userId: string, finalId: string) {
   return {
-    id: res.id || undefined,
+    id: finalId,
     slug: res.slug || (res.name || "perfil").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
     name: res.name || `${res.nombres || ""} ${res.apellidos || ""}`.trim() || "Sin Nombre",
     position: res.position || "",
@@ -116,8 +135,9 @@ export async function getResumes(userId: string): Promise<Resume[]> {
 }
 
 export async function saveResumeToSupabase(resume: Partial<Resume>, userId: string): Promise<Resume> {
-  const isUpdating = !!resume.id;
-  const payload = sanitizeResume(resume, userId);
+  const isUpdating = !!resume.id && isValidUUID(resume.id);
+  const finalId = isUpdating ? resume.id! : generateUUID();
+  const payload = sanitizeResume(resume, userId, finalId);
 
   // Extend table records to insert missing column mappings safely if column does not exist
   // We specify these extra columns in resumes table mapping
@@ -142,7 +162,7 @@ export async function saveResumeToSupabase(resume: Partial<Resume>, userId: stri
     const { data, error } = await supabase
       .from("resumes")
       .update(extendedPayload)
-      .eq("id", resume.id)
+      .eq("id", finalId)
       .eq("user_id", userId)
       .select()
       .single();

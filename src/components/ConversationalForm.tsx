@@ -19,7 +19,7 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
     { title: "Identificación Personal", subtitle: "Nombres, apellidos y documento de identidad", icon: User },
     { title: "Nacimiento y Estado", subtitle: "Fecha, lugar de nacimiento y estado civil", icon: Sparkles },
     { title: "Información de Contacto", subtitle: "Teléfono, correo y dirección de vivienda", icon: MapPin },
-    { title: "Estudios (Secundaria)", subtitle: "Detalles del título académico de secundaria u otros", icon: GraduationCap },
+    { title: "Estudios Realizados", subtitle: "Registra tus logros académicos (secundaria, técnicos, universitarios, etc.)", icon: GraduationCap },
     { title: "Perfil y Resumen", subtitle: "Breve descripción de tu perfil profesional y cargo", icon: FileText },
     { title: "Experiencia Laboral", subtitle: "Empresas, cargos y fechas de trabajo", icon: Briefcase },
     { title: "Referencias", subtitle: "Personas de contacto que certifican tus capacidades", icon: Award }
@@ -127,17 +127,9 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
     name: "", role: "", phone: "", ciudad: ""
   });
 
-  // State for single education (Secundaria) mapped to the form structure
-  const [secundaria, setSecundaria] = useState(() => {
-    if (initialResume && initialResume.education && initialResume.education.length > 0) {
-      return {
-        school: initialResume.education[0].school || "",
-        degree: initialResume.education[0].degree || "",
-        start_date: initialResume.education[0].start_date || "",
-        ciudad: initialResume.education[0].ciudad || ""
-      };
-    }
-    return { school: "", degree: "", start_date: "", ciudad: "" };
+  // State for dynamic additions of education records
+  const [tempEdu, setTempEdu] = useState<Partial<Education>>({
+    school: "", degree: "", start_date: "", ciudad: ""
   });
 
   const progressPercentage = Math.round(((currentStep + 1) / STEPS.length) * 100);
@@ -203,13 +195,19 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
         { id: "s-1", name: "Manejo de Office (Word, Excel)", level: 85 },
         { id: "s-2", name: "Servicio al Cliente", level: 90 },
         { id: "s-3", name: "Gestión Documental", level: 80 }
+      ],
+      education: [
+        {
+          id: "edu-1",
+          school: "Colegio San José de las Vegas",
+          degree: "Bachiller Académica",
+          start_date: "2011",
+          end_date: "2011",
+          current: false,
+          description: "Estudios de secundaria",
+          ciudad: "Medellín"
+        }
       ]
-    });
-    setSecundaria({
-      school: "Colegio San José de las Vegas",
-      degree: "Bachiller Académica",
-      start_date: "2011",
-      ciudad: "Medellín"
     });
   };
 
@@ -226,26 +224,31 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
         return;
       }
 
-      // Map single secundaria block to the standard education array of type Resume
-      const finalEducation: Education[] = [];
-      if (secundaria.school || secundaria.degree) {
-        finalEducation.push({
-          id: "edu-secundaria",
-          school: secundaria.school,
-          degree: secundaria.degree,
-          start_date: secundaria.start_date,
-          end_date: secundaria.start_date,
-          current: false,
-          description: "Estudios de secundaria",
-          ciudad: secundaria.ciudad
-        });
+      // Safeguard: auto-commit text from active inputs if they forgot to click "Agregar"
+      const finalEducation = [...(resumeData.education || [])];
+      if (tempEdu.school && tempEdu.degree) {
+        const alreadyExists = finalEducation.some(
+          edu => edu.school?.toLowerCase() === tempEdu.school?.toLowerCase() && edu.degree?.toLowerCase() === tempEdu.degree?.toLowerCase()
+        );
+        if (!alreadyExists) {
+          finalEducation.push({
+            id: "edu-" + Math.random().toString(36).substring(2, 9),
+            school: tempEdu.school,
+            degree: tempEdu.degree,
+            start_date: tempEdu.start_date || "",
+            end_date: tempEdu.start_date || "",
+            current: false,
+            description: "Estudios",
+            ciudad: tempEdu.ciudad || ""
+          });
+        }
       }
 
       const generatedName = `${realNombres} ${realApellidos}`.trim();
 
       onSave({
         ...resumeData,
-        id: resumeData.id || Math.random().toString(36).substring(2, 9),
+        id: resumeData.id || "res-" + Math.random().toString(36).substring(2, 9),
         slug: resumeData.slug || generatedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "perfil",
         name: generatedName,
         position: resumeData.position || "Profesora / Profesional",
@@ -324,6 +327,29 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
     updateField("references", (resumeData.references || []).filter(r => r.id !== id));
   };
 
+  const addEducation = () => {
+    if (!tempEdu.school || !tempEdu.degree) {
+      alert("El Nombre de la Institución y el Título Obtenido son de carácter obligatorio.");
+      return;
+    }
+    const newEdu: Education = {
+      id: "edu-" + Math.random().toString(36).substring(2, 9),
+      school: tempEdu.school || "",
+      degree: tempEdu.degree || "",
+      start_date: tempEdu.start_date || "",
+      end_date: tempEdu.start_date || "",
+      current: false,
+      description: "Estudios",
+      ciudad: tempEdu.ciudad || ""
+    };
+    updateField("education", [...(resumeData.education || []), newEdu]);
+    setTempEdu({ school: "", degree: "", start_date: "", ciudad: "" });
+  };
+
+  const removeEducation = (id: string) => {
+    updateField("education", (resumeData.education || []).filter(e => e.id !== id));
+  };
+
   const CurrentIcon = STEPS[currentStep].icon;
 
   const animationVariants = {
@@ -389,22 +415,6 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
               );
             })}
           </div>
-        </div>
-
-        {/* Floating templates filler panel to ease testing */}
-        <div className="mt-8 pt-6 border-t border-stone-800" id="quick-templates-section">
-          <p className="text-[11px] text-brand font-mono mb-2">💡 Auto-completar plantilla:</p>
-          <button
-            type="button"
-            onClick={handleLoadTemplateData}
-            className="w-full text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 transition px-3 py-2.5 rounded-xl text-center font-bold text-white flex items-center justify-center gap-2 cursor-pointer"
-            title="Cargar Información de Ejemplo"
-          >
-            <Sparkles size={11} className="text-brand" /> Cargar Datos de Ejemplo
-          </button>
-          <p className="text-[9px] text-stone-500 mt-2 leading-relaxed">
-            Rellena automáticamente todos los campos del formulario con información clásica para realizar pruebas rápidas.
-          </p>
         </div>
       </div>
 
@@ -707,60 +717,90 @@ export default function ConversationalForm({ initialResume, onSave, onCancel }: 
                 </div>
               )}
 
-              {/* Paso 4: Estudios Secundaria */}
+              {/* Paso 4: Estudios e Historial Académico */}
               {currentStep === 3 && (
                 <div className="space-y-4" id="step-education-details">
-                  <div className="bg-stone-50/50 p-4 rounded-xl border border-stone-200 space-y-4">
-                    <p className="text-xs font-bold text-stone-800 border-b border-stone-200 pb-2">Estudios de Básica / Secundaria:</p>
+                  {/* List of currently added education items */}
+                  {resumeData.education && resumeData.education.length > 0 && (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {resumeData.education.map((edu) => (
+                        <div key={edu.id} className="flex justify-between items-center bg-stone-50 border border-stone-200 p-2 text-xs rounded-xl">
+                          <div>
+                            <p className="font-bold text-stone-900">{edu.school} - {edu.degree}</p>
+                            <p className="text-[10px] text-stone-500">Graduación: {edu.start_date} | Ciudad: {edu.ciudad}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeEducation(edu.id)}
+                            className="p-1 px-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Addition box */}
+                  <div className="bg-stone-50/50 p-3.5 rounded-xl border border-stone-200 border-dashed space-y-3">
+                    <p className="text-xs font-bold text-stone-800 text-brand">Registrar un título académico:</p>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-mono uppercase text-stone-500 block mb-1 font-semibold">Institución Educativa (Colegio) *</label>
+                        <label className="text-[10px] font-mono uppercase text-stone-500 block mb-1 font-semibold">Institución Educativa (Colegio/Universidad/Sena) *</label>
                         <input
                           type="text"
-                          placeholder="Ej. Colegio San José de las Vegas"
-                          value={secundaria.school}
-                          onChange={(e) => setSecundaria(p => ({ ...p, school: e.target.value }))}
-                          className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand outline-none transition text-stone-900"
+                          placeholder="Ej. Colegio San José o Sena / Unipaz"
+                          value={tempEdu.school || ""}
+                          onChange={(e) => setTempEdu(p => ({ ...p, school: e.target.value }))}
+                          className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand text-stone-900"
                         />
                       </div>
                       <div>
                         <label className="text-[10px] font-mono uppercase text-stone-500 block mb-1 font-semibold">Título Obtenido *</label>
                         <input
                           type="text"
-                          placeholder="Ej. Bachiller Académica u Homólogo"
-                          value={secundaria.degree}
-                          onChange={(e) => setSecundaria(p => ({ ...p, degree: e.target.value }))}
-                          className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand outline-none transition text-stone-900"
+                          placeholder="Ej. Bachiller Académico, Técnico, Profesional"
+                          value={tempEdu.degree || ""}
+                          onChange={(e) => setTempEdu(p => ({ ...p, degree: e.target.value }))}
+                          className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand text-stone-900"
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-[10px] font-mono uppercase text-stone-500 block mb-1 font-semibold">Año de Graduación *</label>
                         <input
                           type="text"
                           placeholder="Ej. 2011"
-                          value={secundaria.start_date}
-                          onChange={(e) => setSecundaria(p => ({ ...p, start_date: e.target.value }))}
-                          className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand outline-none transition text-stone-900"
+                          value={tempEdu.start_date || ""}
+                          onChange={(e) => setTempEdu(p => ({ ...p, start_date: e.target.value }))}
+                          className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand text-stone-900"
                         />
                       </div>
                       <div>
                         <label className="text-[10px] font-mono uppercase text-stone-500 block mb-1 font-semibold">Ciudad Instituto *</label>
                         <input
                           type="text"
-                          placeholder="Ej. Medellín"
-                          value={secundaria.ciudad}
-                          onChange={(e) => setSecundaria(p => ({ ...p, ciudad: e.target.value }))}
-                          className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand outline-none transition text-stone-900"
+                          placeholder="Ej. Medellín, Bogotá"
+                          value={tempEdu.ciudad || ""}
+                          onChange={(e) => setTempEdu(p => ({ ...p, ciudad: e.target.value }))}
+                          className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand text-stone-900"
                         />
                       </div>
                     </div>
-                    
-                    <p className="text-[11px] text-stone-500 leading-normal italic">
-                      💡 La sección de Estudios Realizados muestra el nivel de secundaria básico según el formato solicitado.
+
+                    <button
+                      type="button"
+                      onClick={addEducation}
+                      className="w-full bg-stone-900 text-white font-bold py-2 px-3 rounded-lg text-xs hover:bg-stone-800 transition flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={13} className="text-brand" /> Agregar Estudio a la Lista
+                    </button>
+
+                    <p className="text-[10px] text-stone-500 leading-normal italic text-center mt-1">
+                      💡 Puedes registrar hasta 4 o más estudios pulsando "Agregar Estudio". Los acumulados se guardarán automáticamente en tu hoja de vida.
                     </p>
                   </div>
                 </div>
